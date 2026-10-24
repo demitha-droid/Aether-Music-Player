@@ -1,0 +1,6 @@
+{
+  "name": "Aether Music Player",
+  "description": "A modern, sleek, minimal music player built with Kotlin architecture, pure AMOLED and light modes, real-time audio visualizer, 10-band equalizer, and deep sonic intelligence.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
