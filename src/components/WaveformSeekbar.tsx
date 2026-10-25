@@ -208,62 +208,64 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
       : 0;
 
   return (
-    <div className="space-y-1.5 select-none">
+    <div className="w-full space-y-1 select-none">
       {/* Top Micro Status Strip: Waveform Toggle + Gapless / Crossfade Badges */}
       <div className="flex items-center justify-between text-[10px] font-mono">
         <div className="flex items-center gap-1.5">
           <button
             onClick={() => setMode(mode === "waveform" ? "minimal" : "waveform")}
-            className={`flex items-center gap-1 px-2 py-0.5 rounded-md border transition-colors ${
+            className={`h-6 px-2 rounded-md border flex items-center gap-1.5 transition-colors font-medium ${
               isAmoled
                 ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
                 : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
             }`}
-            title="Switch between Interactive Waveform and Minimal Seekbar"
+            title="Switch between Waveform and Linear Seekbar"
           >
             {mode === "waveform" ? (
               <>
                 <AudioWaveform size={11} style={{ color: accent.hex }} />
-                <span>WAVEFORM SCRUB</span>
+                <span>WAVEFORM</span>
               </>
             ) : (
               <>
                 <Minus size={11} style={{ color: accent.hex }} />
-                <span>LINEAR BAR</span>
+                <span>LINEAR</span>
               </>
             )}
           </button>
 
           {track?.file && (
             <span
-              className="px-1.5 py-0.5 rounded text-[9px] font-semibold"
-              style={{ backgroundColor: `${accent.hex}18`, color: accent.hex }}
+              className={`h-6 px-2 rounded-md border flex items-center text-[10px] font-semibold ${
+                isAmoled ? "bg-neutral-950 border-neutral-800" : "bg-neutral-100 border-neutral-200"
+              }`}
+              style={{ color: accent.hex }}
             >
-              PCM ANALYZED
+              PCM
             </span>
           )}
         </div>
 
-        {/* Crossfade & Gapless status pills (clickable to open EQ/DSP settings) */}
+        {/* Crossfade & Gapless status buttons */}
         <div className="flex items-center gap-1.5">
           {gaplessEnabled && (
             <button
               onClick={onOpenEqualizer}
-              className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-colors ${
+              className={`h-6 px-2 rounded-md border flex items-center gap-1 transition-colors ${
                 isAmoled
-                  ? "bg-neutral-950 border-neutral-800/80 text-neutral-400 hover:text-white"
+                  ? "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white"
                   : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
               }`}
-              title="Gapless Playback Engine Active (Click to configure)"
+              title="Gapless Playback Engine Active"
             >
-              <Zap size={9} style={{ color: accent.hex }} />
+              <Zap size={10} style={{ color: accent.hex }} />
               <span>GAPLESS</span>
             </button>
           )}
 
           <button
             onClick={onOpenEqualizer}
-            className={`flex items-center gap-1 px-1.5 py-0.5 rounded border transition-all ${
+            className={`h-6 px-2 rounded-md border flex items-center gap-1 transition-all ${
               isCrossfading
                 ? "animate-pulse font-bold"
                 : crossfadeSeconds > 0
@@ -271,26 +273,26 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
                   ? "bg-neutral-950 border-neutral-800 text-neutral-300"
                   : "bg-neutral-100 border-neutral-200 text-neutral-700"
                 : isAmoled
-                ? "bg-neutral-950/50 border-neutral-900 text-neutral-500 hover:text-neutral-300"
-                : "bg-neutral-50 border-neutral-200 text-neutral-400 hover:text-neutral-700"
+                ? "bg-neutral-950 border-neutral-800 text-neutral-500 hover:text-neutral-300"
+                : "bg-neutral-100 border-neutral-200 text-neutral-400 hover:text-neutral-700"
             }`}
             style={
               isCrossfading
                 ? {
-                    backgroundColor: `${accent.hex}25`,
+                    backgroundColor: `${accent.hex}22`,
                     borderColor: accent.hex,
                     color: accent.hex,
                   }
                 : crossfadeSeconds > 0
-                ? { borderColor: `${accent.hex}50`, color: accent.hex }
+                ? { color: accent.hex }
                 : undefined
             }
-            title="Configure Crossfade & Gapless Transitions"
+            title="Configure Crossfade & Transitions"
           >
-            <Shuffle size={9} />
+            <Shuffle size={10} />
             <span>
               {isCrossfading
-                ? `CROSSFADING (${crossfadeSeconds}s)`
+                ? `MIX (${crossfadeSeconds}s)`
                 : crossfadeSeconds > 0
                 ? `XFADE ${crossfadeSeconds}s`
                 : "XFADE OFF"}
@@ -309,10 +311,10 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
           onPointerLeave={() => {
             if (!isScrubbing) setHoverRatio(null);
           }}
-          className={`relative h-16 w-full rounded-2xl border px-2.5 py-2 cursor-pointer overflow-hidden flex items-center transition-colors touch-none ${
+          className={`relative h-12 w-full rounded-xl border px-2 py-1.5 cursor-pointer overflow-hidden flex items-center transition-colors touch-none ${
             isAmoled
-              ? "bg-neutral-950/90 border-neutral-900 hover:border-neutral-800"
-              : "bg-white border-neutral-200 hover:border-neutral-300"
+              ? "bg-neutral-950 border-neutral-800 hover:border-neutral-700"
+              : "bg-neutral-50 border-neutral-200 hover:border-neutral-300"
           }`}
         >
           {/* Crossfade Overlap Tail Highlight Zone */}
@@ -321,8 +323,8 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
               className="absolute top-0 bottom-0 right-0 pointer-events-none flex items-start justify-end p-1 transition-all"
               style={{
                 width: `${crossfadeRatio * 100}%`,
-                background: `linear-gradient(to right, transparent, ${accent.hex}22)`,
-                borderLeft: `1px dashed ${accent.hex}66`,
+                background: `linear-gradient(to right, transparent, ${accent.hex}18)`,
+                borderLeft: `1px dashed ${accent.hex}50`,
               }}
             >
               <span
@@ -337,7 +339,7 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
           {/* Hover Scrub Timestamp Tooltip */}
           {hoverRatio !== null && (
             <div
-              className="absolute top-1 z-20 -translate-x-1/2 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold pointer-events-none shadow-md transition-transform"
+              className="absolute top-1 z-20 -translate-x-1/2 px-1.5 py-0.5 rounded text-[9px] font-mono font-bold pointer-events-none shadow-md"
               style={{
                 left: `${Math.max(8, Math.min(92, hoverRatio * 100))}%`,
                 backgroundColor: accent.hex,
@@ -369,10 +371,9 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
                 ((hoverRatio >= progressRatio && barRatio > progressRatio && barRatio <= hoverRatio) ||
                   (hoverRatio < progressRatio && barRatio >= hoverRatio && barRatio <= progressRatio));
 
-              const mainHeightPercent = Math.round(peak * 70);
-              const reflectionHeightPercent = Math.round(peak * 22);
+              const heightPercent = Math.max(14, Math.round(peak * 88));
 
-              let barColor = isAmoled ? "#262626" : "#d4d4d8";
+              let barColor = isAmoled ? "#262626" : "#cbd5e1";
               if (isPlayed) {
                 barColor = accent.hex;
               } else if (isHovered) {
@@ -382,33 +383,19 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
               return (
                 <div
                   key={idx}
-                  className="flex-1 h-full flex flex-col items-center justify-center gap-[2px]"
+                  className="flex-1 h-full flex items-center justify-center"
                 >
-                  {/* Upper Main Peak */}
-                  <div className="w-full flex-1 flex items-end justify-center">
-                    <div
-                      className="w-full rounded-t-full transition-all duration-75"
-                      style={{
-                        height: `${Math.max(12, mainHeightPercent)}%`,
-                        backgroundColor: barColor,
-                        boxShadow:
-                          isPlayed && Math.abs(barRatio - progressRatio) < 0.025
-                            ? `0 0 8px ${accent.glow}`
-                            : undefined,
-                      }}
-                    />
-                  </div>
-
-                  {/* Lower Mirror Reflection (SoundCloud / Poweramp style) */}
-                  <div className="w-full h-3 flex items-start justify-center opacity-35">
-                    <div
-                      className="w-full rounded-b-full transition-all duration-75"
-                      style={{
-                        height: `${Math.max(20, reflectionHeightPercent * 3)}%`,
-                        backgroundColor: barColor,
-                      }}
-                    />
-                  </div>
+                  <div
+                    className="w-full rounded-full transition-all duration-75"
+                    style={{
+                      height: `${heightPercent}%`,
+                      backgroundColor: barColor,
+                      boxShadow:
+                        isPlayed && Math.abs(barRatio - progressRatio) < 0.025
+                          ? `0 0 6px ${accent.glow}`
+                          : undefined,
+                    }}
+                  />
                 </div>
               );
             })}
@@ -416,7 +403,9 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
         </div>
       ) : (
         /* Minimal Linear Bar Fallback */
-        <div className="relative group flex items-center py-2">
+        <div className={`h-12 w-full rounded-xl border px-3 flex items-center transition-colors ${
+          isAmoled ? "bg-neutral-950 border-neutral-800" : "bg-neutral-50 border-neutral-200"
+        }`}>
           <input
             type="range"
             min={0}
@@ -428,7 +417,7 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
             style={{
               accentColor: accent.hex,
               background: `linear-gradient(to right, ${accent.hex} ${progressRatio * 100}%, ${
-                isAmoled ? "#1f1f1f" : "#e2e8f0"
+                isAmoled ? "#262626" : "#cbd5e1"
               } ${progressRatio * 100}%)`,
             }}
           />
@@ -436,7 +425,7 @@ export const WaveformSeekbar: React.FC<WaveformSeekbarProps> = ({
       )}
 
       {/* Timestamps Row */}
-      <div className="flex items-center justify-between text-xs font-mono text-neutral-400 px-0.5">
+      <div className="flex items-center justify-between text-[11px] font-mono text-neutral-400 px-0.5 tabular-nums">
         <span style={{ color: isScrubbing ? accent.hex : undefined }}>
           {formatTime(currentTime)}
         </span>

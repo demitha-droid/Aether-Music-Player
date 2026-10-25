@@ -136,14 +136,14 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-x-0 top-[65px] bottom-[158px] z-40 flex justify-end bg-black/60 backdrop-blur-sm animate-in fade-in duration-200"
+      className="fixed inset-x-0 top-0 bottom-16 z-50 flex flex-col bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 select-none"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`w-full max-w-md h-full flex flex-col border-l shadow-2xl relative transition-all ${
+        className={`w-full h-full flex flex-col relative transition-all ${
           isAmoled
-            ? "bg-black border-neutral-900 text-white"
-            : "bg-white border-neutral-200 text-neutral-900"
+            ? "bg-black text-white"
+            : "bg-white text-neutral-900"
         }`}
       >
         {/* Top Header */}

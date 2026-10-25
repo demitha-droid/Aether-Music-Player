@@ -42,14 +42,14 @@ export const PermanentPlaylistBar: React.FC<PermanentPlaylistBarProps> = ({
     <div
       className={`fixed left-0 right-0 z-[55] transition-all duration-300 border-t backdrop-blur-xl ${
         isAmoled
-          ? "bg-black/95 border-neutral-900/90 text-white"
-          : "bg-white/95 border-neutral-200/90 text-neutral-900"
+          ? "bg-black/95 border-neutral-800 text-white"
+          : "bg-white/95 border-neutral-200 text-neutral-900"
       }`}
       style={{
         bottom: "64px", // Positioned directly above the 64px BottomNavBar
       }}
     >
-      <div className="max-w-6xl mx-auto px-3 py-1.5 flex items-center justify-between gap-2">
+      <div className="max-w-sm mx-auto px-3 py-1.5 flex items-center justify-between gap-2">
         {/* Left: Section Badge & Expand Toggle */}
         <div className="flex items-center gap-2 shrink-0">
           <button
@@ -64,7 +64,7 @@ export const PermanentPlaylistBar: React.FC<PermanentPlaylistBarProps> = ({
           >
             <ListMusic size={13} />
             <span className="hidden sm:inline uppercase">Playlists</span>
-            <span className="px-1.5 py-0.2 rounded-full text-[9px] bg-black/40 text-white">
+            <span className="px-1.5 py-0.5 rounded-full text-[9px] bg-black/40 text-white font-mono">
               {playlists.length}
             </span>
           </button>

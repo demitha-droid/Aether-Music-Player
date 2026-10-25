@@ -270,7 +270,7 @@ export const PlaylistHub: React.FC<PlaylistHubProps> = ({
                       e.stopPropagation();
                       onPlayPlaylist(pl);
                     }}
-                    className="absolute bottom-3 right-3 w-12 h-12 rounded-full flex items-center justify-center text-black shadow-xl opacity-0 group-hover:opacity-100 transition-all duration-300 transform translate-y-2 group-hover:translate-y-0"
+                    className="absolute bottom-3 right-3 w-12 h-12 rounded-full flex items-center justify-center text-black shadow-xl opacity-95 active:scale-90 transition-all"
                     style={{ backgroundColor: accent.hex }}
                     title="Play Playlist"
                   >

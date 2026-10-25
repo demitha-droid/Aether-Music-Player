@@ -118,6 +118,7 @@ export default function App() {
   // Theme & Appearance
   const [theme, setTheme] = useState<ThemeMode>("amoled");
   const [accent, setAccent] = useState<AccentColor>(ACCENT_COLORS[0]);
+  const [isPaletteOpen, setIsPaletteOpen] = useState(false);
   const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>("bars");
 
   // Playlists, Memory & Multi-Queue Sessions (Musicolet Style)
@@ -386,6 +387,25 @@ export default function App() {
 
   const toggleTheme = () => {
     setTheme((prev) => (prev === "amoled" ? "light" : "amoled"));
+  };
+
+  const cycleSleepTimer = () => {
+    if (sleepTimerMinutes === null) {
+      setSleepTimerMinutes(15);
+      setSleepTimerRemaining(15 * 60);
+    } else if (sleepTimerMinutes === 15) {
+      setSleepTimerMinutes(30);
+      setSleepTimerRemaining(30 * 60);
+    } else if (sleepTimerMinutes === 30) {
+      setSleepTimerMinutes(45);
+      setSleepTimerRemaining(45 * 60);
+    } else if (sleepTimerMinutes === 45) {
+      setSleepTimerMinutes(60);
+      setSleepTimerRemaining(60 * 60);
+    } else {
+      setSleepTimerMinutes(null);
+      setSleepTimerRemaining(null);
+    }
   };
 
   const toggleFavorite = (trackId: string) => {
@@ -775,7 +795,7 @@ export default function App() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`min-h-screen w-full flex flex-col transition-colors duration-300 font-sans select-none relative ${
+      className={`h-[100dvh] w-full flex flex-col transition-colors duration-300 font-sans select-none relative overflow-hidden ${
         isAmoled ? "bg-black text-white" : "bg-neutral-50 text-neutral-900"
       }`}
     >
@@ -792,209 +812,166 @@ export default function App() {
 
       {/* TOP STATUS / NAV BAR */}
       <header
-        className={`w-full px-6 py-4 flex items-center justify-between border-b shrink-0 ${
-          isAmoled ? "border-neutral-900/90 bg-black" : "border-neutral-200/90 bg-white"
+        className={`w-full h-14 px-4 flex items-center justify-between border-b shrink-0 z-30 ${
+          isAmoled ? "border-neutral-900 bg-black" : "border-neutral-200 bg-white"
         }`}
       >
         {/* Brand / Logo */}
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center font-bold text-xs"
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-mono font-black text-xs tracking-tighter shadow-md shrink-0"
             style={{
               backgroundColor: accent.hex,
               color: isAmoled ? "#000000" : "#ffffff",
-              boxShadow: `0 0 16px ${accent.glow}`,
+              boxShadow: `0 0 12px ${accent.glow}`,
             }}
           >
             AE
           </div>
 
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="font-bold tracking-tight text-sm">AETHER</span>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5 truncate">
+              <span className="font-extrabold text-xs tracking-wider">AETHER</span>
               <span
-                className="text-[10px] font-mono px-1.5 py-0.5 rounded font-semibold tracking-wider uppercase"
+                className="text-[9px] font-mono px-1.5 py-0.5 rounded-md font-semibold tracking-wider uppercase shrink-0 border"
                 style={{
-                  backgroundColor: `${accent.hex}18`,
+                  backgroundColor: `${accent.hex}15`,
+                  borderColor: `${accent.hex}40`,
                   color: accent.hex,
-                  border: `1px solid ${accent.hex}30`,
                 }}
               >
-                Kotlin &bull; {isAmoled ? "AMOLED" : "LIGHT"}
+                HI-RES
               </span>
             </div>
-            <p className="text-[10px] text-neutral-400 tracking-wide font-mono">
-              AUDIO ENGINE V2.6
+            <p className="text-[10px] text-neutral-400 tracking-wide font-mono truncate">
+              0-Latency Engine
             </p>
           </div>
         </div>
 
-        {/* Center: Quick Action Launchers */}
-        <div className="hidden md:flex items-center gap-2">
-          {/* Memory Explorer Button */}
+        {/* Right: Uniform Action Icons (All 36x36 rounded-xl) */}
+        <div className="flex items-center gap-1.5 shrink-0 relative">
+          {/* Accent Color Palette Popover Button */}
           <button
-            onClick={() => {
-              setActiveNavTab("memory");
-              setIsFileManagerOpen(true);
-              setIsQueueOpen(false);
-            }}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
+            onClick={() => setIsPaletteOpen(!isPaletteOpen)}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
               isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-neutral-200"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-800"
+                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
             }`}
-            title="Browse device memory audio files & directories (Key: F)"
+            title="Choose Accent Color"
           >
-            <HardDrive size={13} style={{ color: accent.hex }} />
-            <span>Memory</span>
+            <span
+              className="w-4 h-4 rounded-full ring-2 ring-white/30 transition-transform shadow-sm"
+              style={{ backgroundColor: accent.hex }}
+            />
           </button>
 
-          {/* Kotlin Studio Button */}
-          <button
-            onClick={() => setIsKotlinStudioOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-neutral-200"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-800"
-            }`}
-            title="Inspect Kotlin Media3 Architecture, StateFlow & Run Kotlin DSL (Key: K)"
-          >
-            <Code2 size={13} style={{ color: accent.hex }} />
-            <span>Kotlin Studio</span>
-          </button>
-
-          {/* Sonic Intelligence Button */}
-          <button
-            onClick={() => setIsSonicAiOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-neutral-200"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-800"
-            }`}
-            title="Engage Gemini 4 Argon with High Thinking for Sonic Acoustic Reasoning (Key: A)"
-          >
-            <Sparkles size={13} style={{ color: accent.hex }} />
-            <span>Sonic AI</span>
-          </button>
-
-          {/* Equalizer Button */}
+          {/* Equalizer (10-Band EQ) */}
           <button
             onClick={() => setIsEqualizerOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
               isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-neutral-200"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-800"
+                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
             }`}
-            title="10-Band Graphic Equalizer & Bass Boost (Key: E)"
+            title="10-Band Equalizer"
           >
-            <Sliders size={13} style={{ color: accent.hex }} />
-            <span>10-Band EQ</span>
+            <Sliders size={15} style={{ color: accent.hex }} />
           </button>
 
-          {/* Lyrics Button */}
+          {/* Sonic Intelligence */}
           <button
-            onClick={() => setIsLyricsOpen(true)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold tracking-wide transition-all border ${
+            onClick={() => setIsSonicAiOpen(true)}
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
               isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-neutral-200"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-800"
+                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
+                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
             }`}
-            title="Synchronized Lyrics & Meaning (Key: L)"
+            title="Sonic Intelligence"
           >
-            <Mic2 size={13} style={{ color: accent.hex }} />
-            <span>Lyrics</span>
-          </button>
-        </div>
-
-        {/* Right: Theme Switcher & Accents & Queue */}
-        <div className="flex items-center gap-3">
-          {/* Accent Color Palette Selector */}
-          <div className="hidden sm:flex items-center gap-1 px-2 py-1 rounded-full border border-neutral-800/40">
-            {ACCENT_COLORS.map((col) => (
-              <button
-                key={col.id}
-                onClick={() => setAccent(col)}
-                className={`w-4 h-4 rounded-full transition-transform ${
-                  accent.id === col.id ? "scale-125 ring-2 ring-white/60" : "hover:scale-110 opacity-70"
-                }`}
-                style={{ backgroundColor: col.hex }}
-                title={col.name}
-              />
-            ))}
-          </div>
-
-          {/* Mobile Memory trigger */}
-          <button
-            onClick={() => {
-              setActiveNavTab("memory");
-              setIsFileManagerOpen(true);
-              setIsQueueOpen(false);
-            }}
-            className={`md:hidden p-2 rounded-xl transition-all border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 text-neutral-300"
-                : "bg-neutral-100 border-neutral-200 text-neutral-700"
-            }`}
-            title="Memory Files (Key: F)"
-          >
-            <HardDrive size={16} style={{ color: accent.hex }} />
+            <Sparkles size={15} style={{ color: accent.hex }} />
           </button>
 
           {/* Theme Toggle (AMOLED / Light) */}
           <button
             onClick={toggleTheme}
-            className={`p-2 rounded-xl transition-all border ${
+            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
               isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-amber-400"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-700"
+                ? "bg-neutral-950 border-neutral-800 text-amber-400 hover:border-neutral-700"
+                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
             }`}
-            title={isAmoled ? "Switch to Light Mode (Key: T)" : "Switch to pure AMOLED Black (Key: T)"}
+            title={isAmoled ? "Switch to Light Mode" : "Switch to pure AMOLED Black"}
           >
-            {isAmoled ? <Sun size={16} /> : <Moon size={16} />}
+            {isAmoled ? <Sun size={15} /> : <Moon size={15} />}
           </button>
 
-          {/* Queue Drawer Trigger */}
-          <button
-            onClick={() => {
-              setActiveNavTab("queue");
-              setIsQueueOpen(true);
-              setIsFileManagerOpen(false);
-            }}
-            className={`p-2 rounded-xl transition-all border flex items-center gap-1.5 text-xs font-semibold ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 hover:bg-neutral-900 text-white"
-                : "bg-neutral-100 border-neutral-200 hover:bg-neutral-200 text-neutral-900"
-            }`}
-            title="Open Queue & Playlist Library (Key: Q)"
-          >
-            <ListMusic size={16} style={{ color: accent.hex }} />
-            <span className="hidden sm:inline font-mono">{queue.length}</span>
-          </button>
+          {/* Color Palette Popover Dropdown */}
+          {isPaletteOpen && (
+            <div
+              className={`absolute top-11 right-0 z-50 p-2 rounded-xl border shadow-2xl flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-1 w-44 ${
+                isAmoled ? "bg-black border-neutral-800 text-white" : "bg-white border-neutral-200 text-black"
+              }`}
+            >
+              <div className="text-[10px] font-mono text-neutral-400 px-1 font-semibold uppercase tracking-wider">
+                Accent Palette
+              </div>
+              {ACCENT_COLORS.map((col) => (
+                <button
+                  key={col.id}
+                  onClick={() => {
+                    setAccent(col);
+                    setIsPaletteOpen(false);
+                  }}
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors border ${
+                    accent.id === col.id
+                      ? isAmoled
+                        ? "bg-neutral-900 border-neutral-700 font-bold"
+                        : "bg-neutral-100 border-neutral-300 font-bold"
+                      : "border-transparent hover:bg-neutral-900/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: col.hex }} />
+                    <span className="text-[11px] truncate">{col.name}</span>
+                  </div>
+                  {accent.id === col.id && (
+                    <span className="text-[11px] font-bold" style={{ color: col.hex }}>✓</span>
+                  )}
+                </button>
+              ))}
+            </div>
+          )}
         </div>
       </header>
 
       {/* MAIN VIEWPORT */}
-      <main className="flex-1 w-full max-w-6xl mx-auto p-4 md:p-8 pb-32 relative overflow-y-auto">
+      <main
+        className={`flex-1 w-full max-w-sm mx-auto px-4 select-none ${
+          activeNavTab === "now-playing"
+            ? "h-[calc(100dvh-56px-64px)] flex flex-col justify-between pt-1 pb-3 overflow-hidden"
+            : "overflow-y-auto py-4 pb-32"
+        }`}
+      >
         {activeNavTab === "now-playing" && (
-          <div className="flex flex-col md:flex-row items-center justify-center gap-8 w-full min-h-[70vh]">
-            {/* LEFT COLUMN: Visualizer & Artwork Vinyl Stage */}
-            <div className="flex-1 flex flex-col items-center justify-center w-full max-w-md">
-              {/* Album Artwork & Rotating Vinyl Disc */}
-              <div className="relative group mb-6">
+          <div className="w-full h-full flex flex-col justify-between min-h-0">
+            {/* 1. Fluid Responsive Album Artwork with AMOLED Glow */}
+            <div className="flex-1 min-h-[110px] max-h-[240px] w-full flex items-center justify-center my-auto relative shrink">
+              <div className="relative h-full aspect-square max-h-[240px]">
                 {/* Ambient Accent Glow in AMOLED Mode */}
                 {isAmoled && (
                   <div
-                    className="absolute -inset-4 rounded-3xl opacity-20 blur-2xl transition-all duration-700"
+                    className="absolute -inset-2.5 rounded-2xl opacity-20 blur-xl transition-all duration-700 pointer-events-none"
                     style={{ backgroundColor: accent.hex }}
                   />
                 )}
 
                 {/* Main Album Card */}
                 <div
-                  className={`relative w-72 h-72 sm:w-80 sm:h-80 rounded-3xl overflow-hidden border shadow-2xl transition-all duration-500 ${
+                  className={`relative w-full h-full rounded-2xl overflow-hidden border shadow-2xl transition-all duration-500 ${
                     isAmoled
-                      ? "bg-neutral-950 border-neutral-800/90 shadow-black"
-                      : "bg-white border-neutral-200 shadow-xl"
+                      ? "bg-neutral-950 border-neutral-800"
+                      : "bg-white border-neutral-200"
                   }`}
                 >
                   <img
@@ -1005,181 +982,77 @@ export default function App() {
                     }`}
                   />
 
-                  {/* Floating Vinyl Overlay Badge */}
-                  <div className="absolute top-3 right-3 flex items-center gap-1.5">
-                    <button
-                      onClick={() => currentTrack && setAddToPlaylistTrack(currentTrack)}
-                      className="p-2 rounded-full backdrop-blur-md transition-all text-white/80 bg-black/40 hover:text-white"
-                      title="Add to Playlist"
-                    >
-                      <ListPlus size={16} />
-                    </button>
-                    <button
-                      onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
-                      className={`p-2 rounded-full backdrop-blur-md transition-all ${
-                        currentTrack && favorites.has(currentTrack.id)
-                          ? "text-rose-500 bg-rose-500/20"
-                          : "text-white/80 bg-black/40 hover:text-white"
-                      }`}
-                      title="Favorite Track"
-                    >
-                      <Heart
-                        size={16}
-                        fill={currentTrack && favorites.has(currentTrack.id) ? "currentColor" : "none"}
-                      />
-                    </button>
-                  </div>
-
-                  {/* Synthetic Procedural Indicator */}
+                  {/* Real-time Audio Synth Indicator */}
                   {currentTrack?.isSynthetic && (
-                    <div className="absolute bottom-3 left-3 px-2.5 py-1 rounded-full text-[10px] font-mono font-medium backdrop-blur-md bg-black/60 text-white/90 border border-white/10 flex items-center gap-1.5">
-                      <Activity size={10} style={{ color: accent.hex }} />
-                      <span>Real-time Audio Synth</span>
+                    <div className="absolute bottom-2 left-2 h-5 px-2 rounded-md text-[9px] font-mono font-medium backdrop-blur-md bg-black/70 text-white/90 border border-white/15 flex items-center gap-1">
+                      <Activity size={9} style={{ color: accent.hex }} />
+                      <span>SYNTH</span>
                     </div>
                   )}
                 </div>
               </div>
-
-              {/* Visualizer Mode Selector & Canvas */}
-              <div className="w-full flex flex-col items-center">
-                {/* Visualizer Mode Buttons */}
-                <div className="flex items-center gap-1 mb-2">
-                  <button
-                    onClick={() => setVisualizerMode("bars")}
-                    className={`p-1.5 rounded-lg text-xs transition-colors ${
-                      visualizerMode === "bars"
-                        ? "text-black"
-                        : isAmoled
-                        ? "text-neutral-500 hover:text-white"
-                        : "text-neutral-400 hover:text-black"
-                    }`}
-                    style={visualizerMode === "bars" ? { backgroundColor: accent.hex } : undefined}
-                    title="Spectrum Bars"
-                  >
-                    <Radio size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => setVisualizerMode("oscilloscope")}
-                    className={`p-1.5 rounded-lg text-xs transition-colors ${
-                      visualizerMode === "oscilloscope"
-                        ? "text-black"
-                        : isAmoled
-                        ? "text-neutral-500 hover:text-white"
-                        : "text-neutral-400 hover:text-black"
-                    }`}
-                    style={visualizerMode === "oscilloscope" ? { backgroundColor: accent.hex } : undefined}
-                    title="Oscilloscope Waveform"
-                  >
-                    <AudioWaveform size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => setVisualizerMode("radial")}
-                    className={`p-1.5 rounded-lg text-xs transition-colors ${
-                      visualizerMode === "radial"
-                        ? "text-black"
-                        : isAmoled
-                        ? "text-neutral-500 hover:text-white"
-                        : "text-neutral-400 hover:text-black"
-                    }`}
-                    style={visualizerMode === "radial" ? { backgroundColor: accent.hex } : undefined}
-                    title="Radial Ring Pulse"
-                  >
-                    <Orbit size={14} />
-                  </button>
-
-                  <button
-                    onClick={() => setVisualizerMode("particles")}
-                    className={`p-1.5 rounded-lg text-xs transition-colors ${
-                      visualizerMode === "particles"
-                        ? "text-black"
-                        : isAmoled
-                        ? "text-neutral-500 hover:text-white"
-                        : "text-neutral-400 hover:text-black"
-                    }`}
-                    style={visualizerMode === "particles" ? { backgroundColor: accent.hex } : undefined}
-                    title="AMOLED Galaxy Particles"
-                  >
-                    <Sparkle size={14} />
-                  </button>
-                </div>
-
-                {/* Audio Reactive Canvas */}
-                <div
-                  className={`w-full max-w-sm h-20 rounded-2xl border p-1 overflow-hidden transition-colors flex items-center justify-center ${
-                    isAmoled ? "bg-black border-neutral-900" : "bg-white border-neutral-200"
-                  }`}
-                >
-                  <AudioVisualizer
-                    mode={visualizerMode}
-                    theme={theme}
-                    accentColor={accent.hex}
-                    isPlaying={isPlaying}
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* RIGHT COLUMN: Track Metadata & Rich Playback Controls */}
-            <div className="flex-1 flex flex-col justify-center w-full max-w-md space-y-6">
-              {/* Track Titles */}
-              <div className="space-y-1 text-center md:text-left">
-                <div className="flex items-center justify-center md:justify-start gap-2">
+            {/* 2. Track Metadata & Quick Action Buttons */}
+            <div className="w-full shrink-0 flex items-center justify-between gap-2 my-1 px-1">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 mb-0.5">
                   <span
-                    className="text-xs font-mono font-semibold uppercase tracking-wider"
+                    className="text-[10px] font-mono font-bold uppercase tracking-wider"
                     style={{ color: accent.hex }}
                   >
                     {currentTrack?.genre || "Electronic"}
                   </span>
                   {currentTrack?.bpm && (
-                    <span className="text-xs text-neutral-400 font-mono">
+                    <span className="text-[10px] text-neutral-400 font-mono">
                       &bull; {currentTrack.bpm} BPM
-                    </span>
-                  )}
-                  {currentTrack?.key && (
-                    <span className="text-xs text-neutral-400 font-mono">
-                      &bull; Key of {currentTrack.key}
                     </span>
                   )}
                 </div>
 
-                <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight truncate">
+                <h1 className="text-lg xs:text-xl font-bold tracking-tight text-white truncate leading-tight">
                   {currentTrack?.title || "No Track Loaded"}
                 </h1>
 
-                <p className="text-sm font-medium text-neutral-400 truncate">
+                <p className="text-xs font-medium text-neutral-400 truncate">
                   {currentTrack?.artist || "Unknown Artist"} &bull; {currentTrack?.album}
                 </p>
               </div>
 
-              {/* Current Live Lyric Snippet Banner */}
-              {currentTrack?.lyrics && currentTrack.lyrics.length > 0 && (
-                <div
-                  onClick={() => setIsLyricsOpen(true)}
-                  className={`p-3 rounded-2xl border cursor-pointer transition-all hover:scale-[1.01] ${
+              {/* Action Buttons: Add to Playlist & Favorite */}
+              <div className="flex items-center gap-1 shrink-0">
+                <button
+                  onClick={() => currentTrack && setAddToPlaylistTrack(currentTrack)}
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
                     isAmoled
-                      ? "bg-neutral-950/70 border-neutral-800 text-neutral-300"
-                      : "bg-white border-neutral-200 text-neutral-700"
+                      ? "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
                   }`}
+                  title="Add to Playlist"
                 >
-                  <div className="flex items-center justify-between text-[10px] font-mono text-neutral-400 mb-1">
-                    <span className="flex items-center gap-1">
-                      <Mic2 size={11} style={{ color: accent.hex }} />
-                      SYNCHRONIZED LYRICS
-                    </span>
-                    <span style={{ color: accent.hex }}>Tap for Karaoke View &rarr;</span>
-                  </div>
-                  <p className="text-xs font-medium italic line-clamp-1">
-                    {currentTrack.lyrics.find(
-                      (l, i, arr) =>
-                        currentTime >= l.time && (i === arr.length - 1 || currentTime < arr[i + 1].time)
-                    )?.text || currentTrack.lyrics[0]?.text}
-                  </p>
-                </div>
-              )}
+                  <ListPlus size={16} />
+                </button>
+                <button
+                  onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
+                  className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                    currentTrack && favorites.has(currentTrack.id)
+                      ? "text-rose-500 bg-rose-500/15 border-rose-500/40"
+                      : isAmoled
+                      ? "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
+                  }`}
+                  title="Favorite Track"
+                >
+                  <Heart
+                    size={16}
+                    fill={currentTrack && favorites.has(currentTrack.id) ? "currentColor" : "none"}
+                  />
+                </button>
+              </div>
+            </div>
 
-              {/* Interactive Waveform Seekbar & Crossfade/Gapless Indicators */}
+            {/* 3. Interactive Waveform Seekbar */}
+            <div className="w-full shrink-0 my-1">
               <WaveformSeekbar
                 track={currentTrack}
                 currentTime={currentTime}
@@ -1192,280 +1065,177 @@ export default function App() {
                 onSeek={handleSeek}
                 onOpenEqualizer={() => setIsEqualizerOpen(true)}
               />
+            </div>
 
-              {/* Core Controls: Shuffle, Prev, Play/Pause, Next, Repeat */}
-              <div className="flex items-center justify-between px-2">
-                {/* Shuffle */}
+            {/* 4. Core Mobile Playback Controls */}
+            <div className="w-full flex items-center justify-between shrink-0 my-1 px-1">
+              {/* Shuffle */}
+              <button
+                onClick={() => setIsShuffle(!isShuffle)}
+                className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                  isShuffle
+                    ? "text-black border-transparent shadow"
+                    : isAmoled
+                    ? "border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-white"
+                    : "border-neutral-200 bg-neutral-100 text-neutral-600 hover:text-black"
+                }`}
+                style={isShuffle ? { backgroundColor: accent.hex } : undefined}
+                title="Shuffle Queue"
+              >
+                <Shuffle size={16} />
+              </button>
+
+              {/* Previous */}
+              <button
+                onClick={skipPrevious}
+                className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                  isAmoled
+                    ? "border-neutral-800 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-neutral-100 text-neutral-900"
+                }`}
+                title="Previous Track"
+              >
+                <SkipBack size={20} />
+              </button>
+
+              {/* Big Touch Play / Pause Button */}
+              <button
+                onClick={togglePlayPause}
+                className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 transform active:scale-90 shadow-xl"
+                style={{
+                  backgroundColor: accent.hex,
+                  color: isAmoled ? "#000000" : "#ffffff",
+                  boxShadow: `0 6px 20px ${accent.glow}`,
+                }}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? (
+                  <Pause size={24} fill="currentColor" />
+                ) : (
+                  <Play size={24} fill="currentColor" className="ml-0.5" />
+                )}
+              </button>
+
+              {/* Next */}
+              <button
+                onClick={skipNext}
+                className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-transform active:scale-95 ${
+                  isAmoled
+                    ? "border-neutral-800 bg-neutral-950 text-white"
+                    : "border-neutral-200 bg-neutral-100 text-neutral-900"
+                }`}
+                title="Next Track"
+              >
+                <SkipForward size={20} />
+              </button>
+
+              {/* Repeat Mode */}
+              <button
+                onClick={() => {
+                  if (repeatMode === "off") setRepeatMode("all");
+                  else if (repeatMode === "all") setRepeatMode("one");
+                  else setRepeatMode("off");
+                }}
+                className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                  repeatMode !== "off"
+                    ? "text-black border-transparent shadow"
+                    : isAmoled
+                    ? "border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-white"
+                    : "border-neutral-200 bg-neutral-100 text-neutral-600 hover:text-black"
+                }`}
+                style={repeatMode !== "off" ? { backgroundColor: accent.hex } : undefined}
+                title={`Repeat: ${repeatMode.toUpperCase()}`}
+              >
+                {repeatMode === "one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
+              </button>
+            </div>
+
+            {/* 5. Sleek Integrated Volume & Quick Tools Utility Bar */}
+            <div
+              className={`w-full h-10 rounded-xl border px-2.5 flex items-center justify-between gap-2 shrink-0 mb-1 transition-colors ${
+                isAmoled
+                  ? "bg-neutral-950 border-neutral-800"
+                  : "bg-neutral-50 border-neutral-200"
+              }`}
+            >
+              {/* Volume slider */}
+              <div className="flex items-center gap-2 flex-1 min-w-0">
                 <button
-                  onClick={() => setIsShuffle(!isShuffle)}
-                  className={`p-2.5 rounded-full transition-colors ${
-                    isShuffle
-                      ? "text-black"
-                      : isAmoled
-                      ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
-                      : "text-neutral-500 hover:text-black hover:bg-neutral-100"
+                  onClick={toggleMute}
+                  className={`p-1 rounded-md transition-colors ${
+                    isAmoled ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-neutral-900"
                   }`}
-                  style={isShuffle ? { backgroundColor: accent.hex } : undefined}
-                  title="Shuffle Queue"
+                  title="Mute / Unmute"
                 >
-                  <Shuffle size={18} />
-                </button>
-
-                {/* Previous */}
-                <button
-                  onClick={skipPrevious}
-                  className={`p-3 rounded-full transition-transform active:scale-95 ${
-                    isAmoled
-                      ? "text-white hover:bg-neutral-900"
-                      : "text-neutral-800 hover:bg-neutral-100"
-                  }`}
-                  title="Previous Track"
-                >
-                  <SkipBack size={22} />
-                </button>
-
-                {/* Play / Pause Primary Button */}
-                <button
-                  onClick={togglePlayPause}
-                  className="w-16 h-16 rounded-full flex items-center justify-center transition-all duration-300 transform active:scale-90 hover:scale-105 shadow-xl"
-                  style={{
-                    backgroundColor: accent.hex,
-                    color: isAmoled ? "#000000" : "#ffffff",
-                    boxShadow: `0 8px 24px ${accent.glow}`,
-                  }}
-                  title={isPlaying ? "Pause (Space)" : "Play (Space)"}
-                >
-                  {isPlaying ? (
-                    <Pause size={28} fill="currentColor" />
+                  {isMuted || volume === 0 ? (
+                    <VolumeX size={14} />
+                  ) : volume < 0.5 ? (
+                    <Volume1 size={14} />
                   ) : (
-                    <Play size={28} fill="currentColor" className="ml-1" />
+                    <Volume2 size={14} />
                   )}
                 </button>
 
-                {/* Next */}
+                <input
+                  type="range"
+                  min={0}
+                  max={1}
+                  step={0.01}
+                  value={isMuted ? 0 : volume}
+                  onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
+                  className="w-full h-1.5 rounded-lg cursor-pointer appearance-none bg-neutral-800"
+                  style={{ accentColor: accent.hex }}
+                />
+
+                <span className="text-[10px] font-mono text-neutral-400 w-7 text-right tabular-nums shrink-0">
+                  {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+                </span>
+              </div>
+
+              {/* Subtle Vertical Divider */}
+              <div className={`h-4 w-px shrink-0 ${isAmoled ? "bg-neutral-800" : "bg-neutral-200"}`} />
+
+              {/* Quick Actions Strip */}
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* Synchronized Lyrics */}
                 <button
-                  onClick={skipNext}
-                  className={`p-3 rounded-full transition-transform active:scale-95 ${
+                  onClick={() => setIsLyricsOpen(true)}
+                  className={`h-7 px-2 rounded-lg border text-[10px] font-mono font-medium flex items-center gap-1 transition-all active:scale-95 ${
                     isAmoled
-                      ? "text-white hover:bg-neutral-900"
-                      : "text-neutral-800 hover:bg-neutral-100"
+                      ? "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:text-white"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
                   }`}
-                  title="Next Track"
+                  title="Synchronized Lyrics"
                 >
-                  <SkipForward size={22} />
+                  <Mic2 size={11} style={{ color: accent.hex }} />
+                  <span>Lyrics</span>
                 </button>
 
-                {/* Repeat Mode */}
+                {/* Sleep Timer with Cycle Tap */}
                 <button
-                  onClick={() => {
-                    if (repeatMode === "off") setRepeatMode("all");
-                    else if (repeatMode === "all") setRepeatMode("one");
-                    else setRepeatMode("off");
-                  }}
-                  className={`p-2.5 rounded-full transition-colors ${
-                    repeatMode !== "off"
-                      ? "text-black"
+                  onClick={cycleSleepTimer}
+                  className={`h-7 px-2 rounded-lg border text-[10px] font-mono font-medium flex items-center gap-1 transition-all active:scale-95 ${
+                    sleepTimerMinutes !== null
+                      ? isAmoled
+                        ? "border-amber-500/60 text-amber-400 bg-amber-500/10 font-bold"
+                        : "border-amber-500/60 text-amber-600 bg-amber-50 font-bold"
                       : isAmoled
-                      ? "text-neutral-400 hover:text-white hover:bg-neutral-900"
-                      : "text-neutral-500 hover:text-black hover:bg-neutral-100"
+                      ? "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:text-white"
+                      : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
                   }`}
-                  style={repeatMode !== "off" ? { backgroundColor: accent.hex } : undefined}
-                  title={`Repeat: ${repeatMode.toUpperCase()}`}
+                  title={
+                    sleepTimerMinutes !== null
+                      ? `Sleep timer: ${Math.ceil((sleepTimerRemaining || 0) / 60)}m left (Tap to cycle/disable)`
+                      : "Set Sleep Timer"
+                  }
                 >
-                  {repeatMode === "one" ? <Repeat1 size={18} /> : <Repeat size={18} />}
-                </button>
-              </div>
-
-              {/* Volume & Sleep Timer Secondary Controls */}
-              <div
-                className={`p-3.5 rounded-2xl border flex items-center justify-between gap-4 ${
-                  isAmoled
-                    ? "bg-neutral-950/60 border-neutral-900"
-                    : "bg-white border-neutral-200"
-                }`}
-              >
-                {/* Volume slider */}
-                <div className="flex items-center gap-2.5 flex-1">
-                  <button
-                    onClick={toggleMute}
-                    className="text-neutral-400 hover:text-white transition-colors"
-                    title="Mute / Unmute (Key: M)"
-                  >
-                    {isMuted || volume === 0 ? (
-                      <VolumeX size={16} />
-                    ) : volume < 0.5 ? (
-                      <Volume1 size={16} />
-                    ) : (
-                      <Volume2 size={16} />
-                    )}
-                  </button>
-
-                  <input
-                    type="range"
-                    min={0}
-                    max={1}
-                    step={0.01}
-                    value={isMuted ? 0 : volume}
-                    onChange={(e) => handleVolumeChange(parseFloat(e.target.value))}
-                    className="w-full h-1.5 rounded-lg cursor-pointer"
-                    style={{ accentColor: accent.hex }}
-                  />
-
-                  <span className="text-[11px] font-mono text-neutral-400 w-8 text-right">
-                    {isMuted ? "0%" : `${Math.round(volume * 100)}%`}
+                  <Clock size={11} className={sleepTimerMinutes !== null ? "animate-spin" : ""} />
+                  <span>
+                    {sleepTimerRemaining !== null
+                      ? `${Math.ceil(sleepTimerRemaining / 60)}m`
+                      : "Timer"}
                   </span>
-                </div>
-
-                {/* Sleep Timer button */}
-                <div className="flex items-center gap-1.5 border-l border-neutral-800/40 pl-3">
-                  <Clock size={14} className="text-neutral-400" />
-                  <select
-                    value={sleepTimerMinutes || ""}
-                    onChange={(e) => {
-                      const val = e.target.value ? parseInt(e.target.value, 10) : null;
-                      setSleepTimerMinutes(val);
-                      setSleepTimerRemaining(val ? val * 60 : null);
-                    }}
-                    className={`text-xs bg-transparent focus:outline-none font-mono cursor-pointer ${
-                      isAmoled ? "text-neutral-300" : "text-neutral-700"
-                    }`}
-                  >
-                    <option value="" className="bg-neutral-900 text-white">Timer Off</option>
-                    <option value="15" className="bg-neutral-900 text-white">15 min</option>
-                    <option value="30" className="bg-neutral-900 text-white">30 min</option>
-                    <option value="45" className="bg-neutral-900 text-white">45 min</option>
-                    <option value="60" className="bg-neutral-900 text-white">60 min</option>
-                  </select>
-
-                  {sleepTimerRemaining !== null && (
-                    <span className="text-[10px] font-mono text-amber-400 animate-pulse">
-                      {Math.floor(sleepTimerRemaining / 60)}:
-                      {String(sleepTimerRemaining % 60).padStart(2, "0")}
-                    </span>
-                  )}
-                </div>
-              </div>
-
-              {/* Permanent Active Queue & Multi-Queue Switcher Card */}
-              <div
-                className={`p-4 rounded-2xl border space-y-2.5 transition-all ${
-                  isAmoled
-                    ? "bg-neutral-950/70 border-neutral-900"
-                    : "bg-white border-neutral-200 shadow-sm"
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <Layers size={15} style={{ color: accent.hex }} />
-                    <span className="text-xs font-bold tracking-tight">
-                      {queues.find((q) => q.id === activeQueueId)?.name || "Main Queue"}
-                    </span>
-                    <span
-                      className="px-1.5 py-0.2 rounded-full text-[9px] font-mono font-semibold"
-                      style={{ backgroundColor: `${accent.hex}22`, color: accent.hex }}
-                    >
-                      {queue.length} tracks
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setIsQueueOpen(true)}
-                    className="text-[11px] font-semibold hover:underline"
-                    style={{ color: accent.hex }}
-                  >
-                    Multi-Queue ({queues.length}) &rarr;
-                  </button>
-                </div>
-
-                {/* Quick Musicolet-style Independent Queue Switcher Pills */}
-                <div className="flex items-center gap-1.5 overflow-x-auto pb-1 scrollbar-none">
-                  {queues.map((q, idx) => {
-                    const isSelected = q.id === activeQueueId;
-                    const savedSec = isSelected ? currentTime : q.savedProgressSeconds;
-                    return (
-                      <button
-                        key={q.id}
-                        onClick={() => handleSwitchQueue(q.id)}
-                        className={`px-2.5 py-1 rounded-xl text-[10px] font-mono font-semibold flex items-center gap-1.5 shrink-0 transition-all border ${
-                          isSelected
-                            ? "text-black border-transparent shadow-sm"
-                            : isAmoled
-                            ? "bg-neutral-900/80 border-neutral-800 text-neutral-400 hover:text-white"
-                            : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
-                        }`}
-                        style={isSelected ? { backgroundColor: accent.hex } : undefined}
-                        title={`Switch to ${q.name} (Restores at ${formatTime(savedSec)})`}
-                      >
-                        <span>Q{idx + 1}: {q.name}</span>
-                        <span className="opacity-75">({formatTime(savedSec)})</span>
-                      </button>
-                    );
-                  })}
-                  <button
-                    onClick={() => handleCreateQueue()}
-                    className={`px-2 py-1 rounded-xl text-[10px] font-mono font-semibold flex items-center gap-1 shrink-0 border transition-colors ${
-                      isAmoled
-                        ? "bg-neutral-900/50 border-neutral-800 text-neutral-400 hover:text-white"
-                        : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
-                    }`}
-                    title="Create a new independent playback queue"
-                  >
-                    <Plus size={10} style={{ color: accent.hex }} />
-                    <span>New Q</span>
-                  </button>
-                </div>
-
-                {/* Inline Tracklist */}
-                <div className="space-y-1 max-h-36 overflow-y-auto scrollbar-none pr-1">
-                  {queue.slice(0, 5).map((track, idx) => {
-                    const isCurrent = currentTrackIndex === idx;
-
-                    return (
-                      <div
-                        key={`${track.id}-${idx}`}
-                        onClick={() => playTrackAtIndex(idx)}
-                        className={`flex items-center justify-between p-2 rounded-xl text-xs cursor-pointer transition-all ${
-                          isCurrent
-                            ? "font-semibold"
-                            : isAmoled
-                            ? "hover:bg-neutral-900/60 text-neutral-400 hover:text-white"
-                            : "hover:bg-neutral-100 text-neutral-600 hover:text-black"
-                        }`}
-                        style={
-                          isCurrent
-                            ? {
-                                backgroundColor: `${accent.hex}18`,
-                                color: accent.hex,
-                              }
-                            : undefined
-                        }
-                      >
-                        <div className="flex items-center gap-2.5 truncate">
-                          <span className="font-mono text-[10px] opacity-60 w-4 text-center">
-                            {isCurrent ? "▶" : idx + 1}
-                          </span>
-                          <span className="truncate">{track.title}</span>
-                        </div>
-
-                        <div className="flex items-center gap-2 shrink-0">
-                          <span className="text-[10px] text-neutral-500 truncate max-w-[80px]">
-                            {track.artist}
-                          </span>
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setAddToPlaylistTrack(track);
-                            }}
-                            className="p-1 text-neutral-500 hover:text-white transition-colors"
-                            title="Add to another playlist"
-                          >
-                            <ListPlus size={12} />
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
+                </button>
               </div>
             </div>
           </div>
@@ -1514,67 +1284,50 @@ export default function App() {
         )}
       </main>
 
-      {/* FOOTER SHORTCUTS & SYSTEM STATUS */}
-      <footer
-        className={`w-full py-2 px-6 border-t flex flex-wrap items-center justify-between text-[11px] font-mono text-neutral-500 shrink-0 ${
-          isAmoled ? "border-neutral-900 bg-black" : "border-neutral-200 bg-white"
-        }`}
-      >
-        <div className="flex items-center gap-3">
-          <span>Shortcuts: Space (Play) &bull; Arrows (Seek/Vol) &bull; F (Memory) &bull; T (Theme) &bull; K (Kotlin) &bull; E (EQ) &bull; L (Lyrics) &bull; Q (Queue)</span>
-        </div>
+      {/* PERMANENT PLAYLIST DOCK (Visible on Playlists tab when no modal is open) */}
+      {activeNavTab === "playlists" && !isFileManagerOpen && !isQueueOpen && (
+        <PermanentPlaylistBar
+          playlists={playlists}
+          activePlaylistId={activePlaylistId}
+          theme={theme}
+          accent={accent}
+          onSelectPlaylist={(plId) => {
+            setActivePlaylistId(plId);
+            const pl = playlists.find((p) => p.id === plId);
+            if (pl && pl.tracks.length > 0) {
+              setQueue(pl.tracks);
+              setCurrentTrackIndex(0);
+              globalAudioEngine.playTrack(pl.tracks[0], 0);
+            }
+          }}
+          onPlayPlaylist={(pl, shuffle) => {
+            if (pl.tracks.length > 0) {
+              const tracksToPlay = shuffle ? [...pl.tracks].sort(() => Math.random() - 0.5) : pl.tracks;
+              setQueue(tracksToPlay);
+              setCurrentTrackIndex(0);
+              globalAudioEngine.playTrack(tracksToPlay[0], 0);
+            }
+          }}
+          onOpenPlaylistHub={() => {
+            setActiveNavTab("playlists");
+            setIsFileManagerOpen(false);
+            setIsQueueOpen(false);
+          }}
+          onCreatePlaylist={(name) => {
+            const newPl: Playlist = {
+              id: `pl-${Date.now()}`,
+              name,
+              description: "Custom user collection",
+              tracks: currentTrack ? [currentTrack] : [],
+              coverUrl: currentTrack?.coverUrl,
+              isCustom: true,
+            };
+            setPlaylists((prev) => [...prev, newPl]);
+          }}
+        />
+      )}
 
-        <div className="flex items-center gap-2">
-          <span>AAudio DSP Pipeline</span>
-          <span>&bull;</span>
-          <span style={{ color: accent.hex }}>
-            {isAmoled ? "OLED 0-Nit True Black" : "High Contrast Minimal Light"}
-          </span>
-        </div>
-      </footer>
-
-      {/* PERMANENT PLAYLIST DOCK (Always visible at the bottom right above bottom nav bar) */}
-      <PermanentPlaylistBar
-        playlists={playlists}
-        activePlaylistId={activePlaylistId}
-        theme={theme}
-        accent={accent}
-        onSelectPlaylist={(plId) => {
-          setActivePlaylistId(plId);
-          const pl = playlists.find((p) => p.id === plId);
-          if (pl && pl.tracks.length > 0) {
-            setQueue(pl.tracks);
-            setCurrentTrackIndex(0);
-            globalAudioEngine.playTrack(pl.tracks[0], 0);
-          }
-        }}
-        onPlayPlaylist={(pl, shuffle) => {
-          if (pl.tracks.length > 0) {
-            const tracksToPlay = shuffle ? [...pl.tracks].sort(() => Math.random() - 0.5) : pl.tracks;
-            setQueue(tracksToPlay);
-            setCurrentTrackIndex(0);
-            globalAudioEngine.playTrack(tracksToPlay[0], 0);
-          }
-        }}
-        onOpenPlaylistHub={() => {
-          setActiveNavTab("playlists");
-          setIsFileManagerOpen(false);
-          setIsQueueOpen(false);
-        }}
-        onCreatePlaylist={(name) => {
-          const newPl: Playlist = {
-            id: `pl-${Date.now()}`,
-            name,
-            description: "Custom user collection",
-            tracks: currentTrack ? [currentTrack] : [],
-            coverUrl: currentTrack?.coverUrl,
-            isCustom: true,
-          };
-          setPlaylists((prev) => [...prev, newPl]);
-        }}
-      />
-
-      {/* MINI PLAYER BAR (Appears when browsing Memory Directory, Playlists, or Queue) */}
+      {/* MINI PLAYER BAR (Appears when browsing File Explorer, Playlists, or Queue) */}
       {(activeNavTab !== "now-playing" || isFileManagerOpen || isQueueOpen) && currentTrack && (
         <div
           onClick={() => {
@@ -1582,9 +1335,9 @@ export default function App() {
             setIsFileManagerOpen(false);
             setIsQueueOpen(false);
           }}
-          className={`fixed bottom-[110px] left-0 right-0 z-[55] h-12 border-t backdrop-blur-xl px-4 flex items-center justify-between cursor-pointer transition-all shadow-xl ${
+          className={`fixed bottom-16 left-0 right-0 z-[55] h-12 border-t backdrop-blur-xl cursor-pointer transition-all shadow-xl select-none ${
             isAmoled
-              ? "bg-black/95 border-neutral-900 text-white"
+              ? "bg-black/95 border-neutral-800 text-white"
               : "bg-white/95 border-neutral-200 text-neutral-900"
           }`}
         >
@@ -1600,41 +1353,47 @@ export default function App() {
             />
           </div>
 
-          <div className="flex items-center gap-3 truncate">
-            <img
-              src={currentTrack.coverUrl}
-              alt={currentTrack.title}
-              className="w-8 h-8 rounded-xl object-cover shrink-0 shadow-md"
-            />
-            <div className="truncate">
-              <div className="text-xs font-bold truncate flex items-center gap-1.5">
-                <span>{currentTrack.title}</span>
-                {isPlaying && (
-                  <span className="w-1.5 h-1.5 rounded-full animate-ping" style={{ backgroundColor: accent.hex }} />
-                )}
-              </div>
-              <div className="text-[10px] text-neutral-400 truncate font-medium">
-                {currentTrack.artist} &bull; {currentTrack.album}
+          <div className="w-full max-w-sm mx-auto h-full px-4 flex items-center justify-between">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <img
+                src={currentTrack.coverUrl}
+                alt={currentTrack.title}
+                className="w-8 h-8 rounded-xl object-cover shrink-0 shadow-md"
+              />
+              <div className="min-w-0 truncate">
+                <div className="text-xs font-bold truncate flex items-center gap-1.5">
+                  <span className="truncate">{currentTrack.title}</span>
+                  {isPlaying && (
+                    <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-ping" style={{ backgroundColor: accent.hex }} />
+                  )}
+                </div>
+                <div className="text-[10px] text-neutral-400 truncate font-medium">
+                  {currentTrack.artist} &bull; {currentTrack.album}
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            <button
-              onClick={togglePlayPause}
-              className="w-7 h-7 rounded-full flex items-center justify-center transition-transform active:scale-90 shadow"
-              style={{ backgroundColor: accent.hex, color: isAmoled ? "#000000" : "#ffffff" }}
-              title={isPlaying ? "Pause" : "Play"}
-            >
-              {isPlaying ? <Pause size={13} fill="currentColor" /> : <Play size={13} fill="currentColor" className="ml-0.5" />}
-            </button>
-            <button
-              onClick={skipNext}
-              className="p-1 text-neutral-400 hover:text-white transition-colors"
-              title="Next Track"
-            >
-              <SkipForward size={15} />
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+              <button
+                onClick={togglePlayPause}
+                className="w-8 h-8 rounded-xl flex items-center justify-center transition-transform active:scale-90 shadow"
+                style={{ backgroundColor: accent.hex, color: isAmoled ? "#000000" : "#ffffff" }}
+                title={isPlaying ? "Pause" : "Play"}
+              >
+                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+              </button>
+              <button
+                onClick={skipNext}
+                className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-colors ${
+                  isAmoled
+                    ? "border-neutral-800 bg-neutral-950 text-neutral-300 hover:text-white"
+                    : "border-neutral-200 bg-neutral-100 text-neutral-700"
+                }`}
+                title="Next Track"
+              >
+                <SkipForward size={14} />
+              </button>
+            </div>
           </div>
         </div>
       )}

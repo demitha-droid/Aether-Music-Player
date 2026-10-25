@@ -176,10 +176,10 @@ export const DEFAULT_TRACKS: Track[] = [
 export const INITIAL_MEMORY_FOLDERS: MemoryFolder[] = [
   {
     id: "folder-root-internal",
-    name: "Internal Storage",
+    name: "Internal Storage (C:)",
     path: "/Internal Storage",
     parentId: null,
-    trackIds: ["track-1", "track-2", "track-3", "track-5"],
+    trackIds: [],
   },
   {
     id: "folder-music",
@@ -187,6 +187,20 @@ export const INITIAL_MEMORY_FOLDERS: MemoryFolder[] = [
     path: "/Internal Storage/Music",
     parentId: "folder-root-internal",
     trackIds: ["track-1", "track-2", "track-5"],
+  },
+  {
+    id: "folder-synthwave",
+    name: "Synthwave Masters",
+    path: "/Internal Storage/Music/Synthwave Masters",
+    parentId: "folder-music",
+    trackIds: ["track-1", "track-5"],
+  },
+  {
+    id: "folder-lofi",
+    name: "Lo-Fi & Ambient",
+    path: "/Internal Storage/Music/Lo-Fi & Ambient",
+    parentId: "folder-music",
+    trackIds: ["track-2"],
   },
   {
     id: "folder-recordings",
@@ -197,10 +211,10 @@ export const INITIAL_MEMORY_FOLDERS: MemoryFolder[] = [
   },
   {
     id: "folder-root-sd",
-    name: "SD Card Memory",
+    name: "SD Card (D:)",
     path: "/SD Card Memory",
     parentId: null,
-    trackIds: ["track-4", "track-6"],
+    trackIds: [],
   },
   {
     id: "folder-downloads",
@@ -211,7 +225,7 @@ export const INITIAL_MEMORY_FOLDERS: MemoryFolder[] = [
   },
   {
     id: "folder-audiobooks",
-    name: "Audiobooks",
+    name: "Audiobooks & Mixes",
     path: "/SD Card Memory/Audiobooks",
     parentId: "folder-root-sd",
     trackIds: ["track-6"],
