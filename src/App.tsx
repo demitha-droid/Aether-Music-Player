@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect } from "react";
 import {
   Play,
   Pause,
@@ -17,27 +17,17 @@ import {
   Volume1,
   Sliders,
   Mic2,
-  ListMusic,
-  Code2,
   Sparkles,
   Sun,
   Moon,
   Clock,
   Disc,
-  Activity,
-  Radio,
-  AudioWaveform,
-  Orbit,
-  Sparkle,
   Upload,
-  Maximize2,
-  Minimize2,
-  Share2,
   Heart,
   HardDrive,
   ListPlus,
-  Layers,
-  Plus,
+  FolderOpen,
+  Music,
 } from "lucide-react";
 
 import {
@@ -45,7 +35,6 @@ import {
   ThemeMode,
   AccentColor,
   RepeatMode,
-  VisualizerMode,
   Playlist,
   MemoryFolder,
   PlaybackQueueSession,
@@ -56,7 +45,14 @@ import {
   INITIAL_MEMORY_FOLDERS,
 } from "./data/defaultTracks";
 import { globalAudioEngine } from "./services/audioEngine";
-import { AudioVisualizer } from "./components/AudioVisualizer";
+import {
+  loadStoredTracks,
+  saveTracksToDB,
+  deleteTrackFromDB,
+  probeAudioDuration,
+  parseTrackFilename,
+  buildFolderHierarchy,
+} from "./services/localAudioStorage";
 import { EqualizerModal } from "./components/EqualizerModal";
 import { LyricsView } from "./components/LyricsView";
 import { KotlinStudio } from "./components/KotlinStudio";
@@ -74,42 +70,42 @@ const ACCENT_COLORS: AccentColor[] = [
     id: "cyan",
     name: "Electric Cyan",
     hex: "#00f2fe",
-    glow: "rgba(0, 242, 254, 0.35)",
+    glow: "rgba(0, 242, 254, 0)",
     activeBg: "bg-cyan-500",
   },
   {
     id: "emerald",
     name: "Matrix Emerald",
     hex: "#10b981",
-    glow: "rgba(16, 185, 129, 0.35)",
+    glow: "rgba(16, 185, 129, 0)",
     activeBg: "bg-emerald-500",
   },
   {
     id: "purple",
     name: "Kotlin Violet",
     hex: "#a855f7",
-    glow: "rgba(168, 85, 247, 0.35)",
+    glow: "rgba(168, 85, 247, 0)",
     activeBg: "bg-purple-500",
   },
   {
     id: "amber",
     name: "Cyber Amber",
     hex: "#f59e0b",
-    glow: "rgba(245, 158, 11, 0.35)",
+    glow: "rgba(245, 158, 11, 0)",
     activeBg: "bg-amber-500",
   },
   {
     id: "crimson",
     name: "Neon Crimson",
     hex: "#f43f5e",
-    glow: "rgba(244, 63, 94, 0.35)",
+    glow: "rgba(244, 63, 94, 0)",
     activeBg: "bg-rose-500",
   },
   {
     id: "mono",
     name: "Pure Monochrome",
     hex: "#e2e8f0",
-    glow: "rgba(226, 232, 240, 0.35)",
+    glow: "rgba(226, 232, 240, 0)",
     activeBg: "bg-slate-200",
   },
 ];
@@ -119,42 +115,25 @@ export default function App() {
   const [theme, setTheme] = useState<ThemeMode>("amoled");
   const [accent, setAccent] = useState<AccentColor>(ACCENT_COLORS[0]);
   const [isPaletteOpen, setIsPaletteOpen] = useState(false);
-  const [visualizerMode, setVisualizerMode] = useState<VisualizerMode>("bars");
 
-  // Playlists, Memory & Multi-Queue Sessions (Musicolet Style)
+  // Playlists, Phone Storage & Multi-Queue Sessions
   const [playlists, setPlaylists] = useState<Playlist[]>(DEFAULT_PLAYLISTS);
   const [activePlaylistId, setActivePlaylistId] = useState<string>("playlist-all");
   const [allTracks, setAllTracks] = useState<Track[]>(DEFAULT_TRACKS);
   const [memoryFolders, setMemoryFolders] = useState<MemoryFolder[]>(INITIAL_MEMORY_FOLDERS);
   const [queue, setQueue] = useState<Track[]>(DEFAULT_TRACKS);
   const [currentTrackIndex, setCurrentTrackIndex] = useState<number>(0);
-  const [favorites, setFavorites] = useState<Set<string>>(new Set(["track-1", "track-5"]));
+  const [favorites, setFavorites] = useState<Set<string>>(new Set());
 
-  // Independent Playback Queues (Each remembers its own tracklist, track index, and timestamp)
+  // Independent Playback Queues
   const [queues, setQueues] = useState<PlaybackQueueSession[]>(() => [
     {
       id: "queue-1",
-      name: "Main Stage",
-      tracks: DEFAULT_TRACKS,
+      name: "Main Queue",
+      tracks: [],
       currentTrackIndex: 0,
       savedProgressSeconds: 0,
       updatedAt: Date.now(),
-    },
-    {
-      id: "queue-2",
-      name: "Night Drive Synth",
-      tracks: DEFAULT_TRACKS.slice(0, 3),
-      currentTrackIndex: 1,
-      savedProgressSeconds: 48,
-      updatedAt: Date.now() - 3600000,
-    },
-    {
-      id: "queue-3",
-      name: "Deep Focus Lo-Fi",
-      tracks: DEFAULT_TRACKS.slice(2, 6),
-      currentTrackIndex: 0,
-      savedProgressSeconds: 75,
-      updatedAt: Date.now() - 7200000,
     },
   ]);
   const [activeQueueId, setActiveQueueId] = useState<string>("queue-1");
@@ -162,7 +141,7 @@ export default function App() {
   // Playback State
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
-  const [duration, setDuration] = useState<number>(DEFAULT_TRACKS[0]?.duration || 180);
+  const [duration, setDuration] = useState<number>(0);
   const [volume, setVolume] = useState<number>(0.85);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [isShuffle, setIsShuffle] = useState<boolean>(false);
@@ -192,7 +171,26 @@ export default function App() {
 
   const currentTrack = queue[currentTrackIndex] || null;
 
-  // Keep the active queue session synchronized with live queue, track index, and timestamp
+  // Load persisted phone audio files from IndexedDB on startup
+  useEffect(() => {
+    let mounted = true;
+    loadStoredTracks().then((stored) => {
+      if (!mounted || stored.length === 0) return;
+      setAllTracks(stored);
+      setQueue(stored);
+      setCurrentTrackIndex(0);
+      setDuration(stored[0]?.duration || 0);
+      setMemoryFolders((prev) => buildFolderHierarchy(stored, prev));
+      setPlaylists((prev) =>
+        prev.map((pl) => (pl.id === "playlist-all" ? { ...pl, tracks: stored } : pl))
+      );
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  // Keep active queue session synchronized
   useEffect(() => {
     setQueues((prev) =>
       prev.map((q) =>
@@ -229,18 +227,17 @@ export default function App() {
     };
   }, [currentTrackIndex, queue, repeatMode, isShuffle]);
 
-  // Handle Track End based on repeat mode
   const handleTrackEnded = () => {
     if (repeatMode === "one") {
       if (currentTrack) {
         globalAudioEngine.playTrack(currentTrack, 0);
       }
-    } else if (isShuffle) {
+    } else if (isShuffle && queue.length > 0) {
       const nextIndex = Math.floor(Math.random() * queue.length);
       playTrackAtIndex(nextIndex);
     } else if (currentTrackIndex < queue.length - 1) {
       playTrackAtIndex(currentTrackIndex + 1);
-    } else if (repeatMode === "all") {
+    } else if (repeatMode === "all" && queue.length > 0) {
       playTrackAtIndex(0);
     } else {
       setIsPlaying(false);
@@ -265,67 +262,6 @@ export default function App() {
     return () => clearInterval(timer);
   }, [sleepTimerRemaining]);
 
-  // Keyboard Shortcuts
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Don't trigger if user is typing in an input
-      if (["INPUT", "TEXTAREA"].includes((e.target as HTMLElement)?.tagName)) {
-        return;
-      }
-
-      switch (e.code) {
-        case "Space":
-          e.preventDefault();
-          togglePlayPause();
-          break;
-        case "ArrowLeft":
-          e.preventDefault();
-          handleSeek(Math.max(0, currentTime - 5));
-          break;
-        case "ArrowRight":
-          e.preventDefault();
-          handleSeek(Math.min(duration, currentTime + 5));
-          break;
-        case "ArrowUp":
-          e.preventDefault();
-          handleVolumeChange(Math.min(1, volume + 0.05));
-          break;
-        case "ArrowDown":
-          e.preventDefault();
-          handleVolumeChange(Math.max(0, volume - 0.05));
-          break;
-        case "KeyM":
-          toggleMute();
-          break;
-        case "KeyL":
-          setIsLyricsOpen((v) => !v);
-          break;
-        case "KeyE":
-          setIsEqualizerOpen((v) => !v);
-          break;
-        case "KeyK":
-          setIsKotlinStudioOpen((v) => !v);
-          break;
-        case "KeyA":
-          setIsSonicAiOpen((v) => !v);
-          break;
-        case "KeyQ":
-          setIsQueueOpen((v) => !v);
-          break;
-        case "KeyF":
-          setIsFileManagerOpen((v) => !v);
-          break;
-        case "KeyT":
-          toggleTheme();
-          break;
-      }
-    };
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [isPlaying, currentTime, duration, volume, isMuted, currentTrack]);
-
-  // Play / Pause toggle
   const togglePlayPause = () => {
     if (!currentTrack) return;
     if (isPlaying) {
@@ -339,6 +275,7 @@ export default function App() {
     if (index >= 0 && index < queue.length) {
       setCurrentTrackIndex(index);
       const track = queue[index];
+      setDuration(track.duration || 0);
       globalAudioEngine.playTrack(track, 0);
     }
   };
@@ -420,44 +357,74 @@ export default function App() {
     });
   };
 
-  // Audio Upload Handling
-  const handleUploadAudioFiles = (files: FileList | File[]) => {
-    const uploadedTracks: Track[] = Array.from(files).map((file, i) => {
-      const title = file.name.replace(/\.[^/.]+$/, "");
-      return {
-        id: `local-${Date.now()}-${i}`,
-        title,
-        artist: "Local Audio File",
-        album: "Local Imports",
-        duration: 180,
-        coverUrl: "https://images.unsplash.com/photo-1470225620780-dba8ba36b745?auto=format&fit=crop&w=600&q=80",
-        genre: "Custom Audio",
-        file,
-        fileSize: file.size,
-        lastModified: file.lastModified,
-        folderPath: "/Internal Storage/Music",
-        isSynthetic: false,
-      };
-    });
+  // Core helper to ingest real phone audio files, probe duration, persist to IndexedDB, and build folders
+  const processAndStoreAudioFiles = async (
+    files: FileList | File[],
+    defaultFolderPath: string = "/Phone Storage"
+  ) => {
+    const audioRegex = /\.(mp3|flac|wav|m4a|aac|ogg|opus|webm|mp4)$/i;
+    const rawFiles = Array.from(files).filter(
+      (f) => f.type.startsWith("audio/") || audioRegex.test(f.name)
+    );
+    if (rawFiles.length === 0) return;
 
-    if (uploadedTracks.length > 0) {
-      setAllTracks((prev) => [...uploadedTracks, ...prev]);
-      setQueue((prev) => [...uploadedTracks, ...prev]);
-      setCurrentTrackIndex(0);
-      globalAudioEngine.playTrack(uploadedTracks[0], 0);
+    const now = Date.now();
+    const createdTracks: Track[] = await Promise.all(
+      rawFiles.map(async (file, i) => {
+        const parsed = parseTrackFilename(file, defaultFolderPath);
+        const realDuration = await probeAudioDuration(file);
+        const ext = file.name.includes(".")
+          ? file.name.split(".").pop()?.toUpperCase() || "AUDIO"
+          : "AUDIO";
 
-      // Register with Music folder
-      setMemoryFolders((prev) =>
-        prev.map((f) =>
-          f.id === "folder-music"
-            ? { ...f, trackIds: [...uploadedTracks.map((t) => t.id), ...f.trackIds] }
-            : f
+        return {
+          id: `phone-${now}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          title: parsed.title,
+          artist: parsed.artist,
+          album: parsed.album,
+          duration: realDuration,
+          coverUrl: "",
+          genre: ext,
+          file,
+          fileSize: file.size,
+          lastModified: file.lastModified,
+          folderPath: parsed.folderPath,
+          isSynthetic: false,
+        };
+      })
+    );
+
+    if (createdTracks.length === 0) return;
+
+    await saveTracksToDB(createdTracks);
+
+    setAllTracks((prev) => {
+      const combined = [...createdTracks, ...prev];
+      setMemoryFolders((currFolders) => buildFolderHierarchy(combined, currFolders));
+      setPlaylists((currPlaylists) =>
+        currPlaylists.map((pl) =>
+          pl.id === "playlist-all" ? { ...pl, tracks: combined } : pl
         )
       );
-    }
+      return combined;
+    });
+
+    setQueue((prev) => [...createdTracks, ...prev]);
+    setCurrentTrackIndex(0);
+    setDuration(createdTracks[0].duration || 0);
+    globalAudioEngine.playTrack(createdTracks[0], 0);
   };
 
-  // Memory File Manager Handlers
+  const handleUploadAudioFiles = (files: FileList | File[]) => {
+    processAndStoreAudioFiles(files, "/Phone Storage");
+  };
+
+  const handleImportTracksToFolder = (files: FileList | File[], targetFolderId: string) => {
+    const targetFolder = memoryFolders.find((f) => f.id === targetFolderId);
+    const targetPath = targetFolder?.path || "/Phone Storage";
+    processAndStoreAudioFiles(files, targetPath);
+  };
+
   const handlePlayTrackFromMemory = (track: Track) => {
     const existingIndex = queue.findIndex((t) => t.id === track.id);
     if (existingIndex !== -1) {
@@ -465,6 +432,7 @@ export default function App() {
     } else {
       setQueue((prev) => [track, ...prev]);
       setCurrentTrackIndex(0);
+      setDuration(track.duration || 0);
       globalAudioEngine.playTrack(track, 0);
     }
   };
@@ -479,6 +447,7 @@ export default function App() {
     if (tracks.length === 0) return;
     setQueue(tracks);
     setCurrentTrackIndex(0);
+    setDuration(tracks[0].duration || 0);
     globalAudioEngine.playTrack(tracks[0], 0);
   };
 
@@ -487,94 +456,33 @@ export default function App() {
     setQueue((prev) => [...prev, ...newItems]);
   };
 
-  const handleImportTracksToFolder = (files: FileList | File[], targetFolderId: string) => {
-    const targetFolder = memoryFolders.find((f) => f.id === targetFolderId);
-    const targetPath = targetFolder?.path || "/Internal Storage/Music";
-
-    const newTracks: Track[] = Array.from(files).map((file, i) => {
-      const nameWithoutExt = file.name.replace(/\.[^/.]+$/, "");
-      return {
-        id: `local-mem-${Date.now()}-${i}`,
-        title: nameWithoutExt,
-        artist: "Device Memory",
-        album: targetFolder?.name || "Local Audio",
-        duration: 180,
-        coverUrl: "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?auto=format&fit=crop&w=600&q=80",
-        genre: "Imported File",
-        file,
-        fileSize: file.size,
-        lastModified: file.lastModified,
-        folderPath: targetPath,
-        isSynthetic: false,
-      };
-    });
-
-    if (newTracks.length > 0) {
-      setAllTracks((prev) => [...newTracks, ...prev]);
-      setMemoryFolders((prev) =>
-        prev.map((f) =>
-          f.id === targetFolderId
-            ? { ...f, trackIds: [...f.trackIds, ...newTracks.map((t) => t.id)] }
-            : f
-        )
-      );
-
-      // Play the first imported track
-      handlePlayTrackFromMemory(newTracks[0]);
-    }
-  };
-
   const handleCreateFolder = (name: string, parentId: string | null) => {
     const parent = memoryFolders.find((f) => f.id === parentId);
-    const parentPath = parent?.path || "/Internal Storage";
+    const parentPath = parent?.path || "/Phone Storage";
     const newFolder: MemoryFolder = {
       id: `folder-${Date.now()}`,
       name,
       path: `${parentPath}/${name}`,
-      parentId,
+      parentId: parent?.id || "folder-root",
       trackIds: [],
     };
     setMemoryFolders((prev) => [...prev, newFolder]);
   };
 
   const handleDeleteTrackFromMemory = (trackId: string) => {
-    setAllTracks((prev) => prev.filter((t) => t.id !== trackId));
+    deleteTrackFromDB(trackId);
+    setAllTracks((prev) => {
+      const updated = prev.filter((t) => t.id !== trackId);
+      setMemoryFolders((currFolders) => buildFolderHierarchy(updated, currFolders));
+      setPlaylists((currPlaylists) =>
+        currPlaylists.map((pl) => ({
+          ...pl,
+          tracks: pl.tracks.filter((t) => t.id !== trackId),
+        }))
+      );
+      return updated;
+    });
     setQueue((prev) => prev.filter((t) => t.id !== trackId));
-    setMemoryFolders((prev) =>
-      prev.map((f) => ({
-        ...f,
-        trackIds: f.trackIds.filter((id: string) => id !== trackId),
-      }))
-    );
-  };
-
-  // Playlist Hub Handlers
-  const handlePlayPlaylist = (playlist: Playlist, shuffle: boolean = false) => {
-    if (playlist.tracks.length === 0) return;
-    let tracksToPlay = [...playlist.tracks];
-    if (shuffle) {
-      tracksToPlay = tracksToPlay.sort(() => Math.random() - 0.5);
-    }
-    setActivePlaylistId(playlist.id);
-    setQueue(tracksToPlay);
-    setCurrentTrackIndex(0);
-    globalAudioEngine.playTrack(tracksToPlay[0], 0);
-  };
-
-  const handleCreatePlaylist = (name: string, description: string, coverUrl?: string) => {
-    const newPl: Playlist = {
-      id: `pl-${Date.now()}`,
-      name,
-      description,
-      tracks: [],
-      coverUrl: coverUrl || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
-      isCustom: true,
-    };
-    setPlaylists((prev) => [...prev, newPl]);
-  };
-
-  const handleDeletePlaylist = (playlistId: string) => {
-    setPlaylists((prev) => prev.filter((p) => p.id !== playlistId));
   };
 
   const handleReorderTrackInPlaylist = (playlistId: string, fromIndex: number, toIndex: number) => {
@@ -620,7 +528,6 @@ export default function App() {
     setPlaylists((prev) => [...prev, newPl]);
   };
 
-  // Drag and drop audio files over entire window
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     setIsDraggingFile(true);
@@ -640,7 +547,6 @@ export default function App() {
     }
   };
 
-  // Apply Equalizer Profile from AI or Modal
   const handleApplyEqProfile = (bands: number[], boost: number, rev: number) => {
     setEqBands(bands);
     setBassBoost(boost);
@@ -680,13 +586,11 @@ export default function App() {
     globalAudioEngine.setGaplessEnabled(enabled);
   };
 
-  // Musicolet-Style Multi-Queue Handlers
   const handleSwitchQueue = (targetQueueId: string) => {
     if (targetQueueId === activeQueueId) return;
     const targetQ = queues.find((q) => q.id === targetQueueId);
     if (!targetQ) return;
 
-    // Save current queue's exact state first
     setQueues((prev) =>
       prev.map((q) =>
         q.id === activeQueueId
@@ -701,7 +605,6 @@ export default function App() {
       )
     );
 
-    // Activate target queue and restore its remembered track & playback timestamp
     setActiveQueueId(targetQ.id);
     setQueue(targetQ.tracks);
     const safeIdx = Math.min(targetQ.currentTrackIndex, Math.max(0, targetQ.tracks.length - 1));
@@ -710,7 +613,7 @@ export default function App() {
     const resumeTime = targetQ.savedProgressSeconds || 0;
     setCurrentTime(resumeTime);
     if (targetTrack) {
-      setDuration(targetTrack.duration || 180);
+      setDuration(targetTrack.duration || 0);
       globalAudioEngine.playTrack(targetTrack, resumeTime);
     } else {
       globalAudioEngine.pause();
@@ -722,7 +625,7 @@ export default function App() {
     const newQ: PlaybackQueueSession = {
       id: `queue-${Date.now()}`,
       name: customName || `Queue ${nextNum}`,
-      tracks: currentTrack ? [currentTrack] : DEFAULT_TRACKS.slice(0, 3),
+      tracks: currentTrack ? [currentTrack] : [],
       currentTrackIndex: 0,
       savedProgressSeconds: 0,
       updatedAt: Date.now(),
@@ -766,7 +669,6 @@ export default function App() {
     );
   };
 
-  // Handle adding tracks compiled from Kotlin DSL
   const handleAddTracksFromDsl = (newTracks: Track[], playlistName: string) => {
     const newPl: Playlist = {
       id: `pl-${Date.now()}`,
@@ -782,12 +684,6 @@ export default function App() {
     globalAudioEngine.playTrack(newTracks[0], 0);
   };
 
-  const formatTime = (secs: number) => {
-    const m = Math.floor(secs / 60);
-    const s = Math.floor(secs % 60);
-    return `${m}:${s.toString().padStart(2, "0")}`;
-  };
-
   const isAmoled = theme === "amoled";
 
   return (
@@ -795,35 +691,33 @@ export default function App() {
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`h-[100dvh] w-full flex flex-col transition-colors duration-300 font-sans select-none relative overflow-hidden ${
+      className={`h-[100dvh] w-full flex flex-col font-sans select-none relative overflow-hidden ${
         isAmoled ? "bg-black text-white" : "bg-neutral-50 text-neutral-900"
       }`}
     >
       {/* Drag & Drop Overlay */}
       {isDraggingFile && (
-        <div className="fixed inset-0 z-50 bg-black/90 backdrop-blur-md flex flex-col items-center justify-center border-4 border-dashed border-cyan-400 p-8 text-center animate-in fade-in">
-          <Upload size={64} className="text-cyan-400 mb-4 animate-bounce" />
-          <h2 className="text-2xl font-bold text-white">Drop Audio Files Here</h2>
-          <p className="text-sm text-neutral-400 mt-2">
-            Supports MP3, WAV, FLAC, OGG, AAC &bull; Instantly loads into Aether Player
+        <div className="fixed inset-0 z-50 bg-black flex flex-col items-center justify-center p-8 text-center">
+          <Upload size={56} style={{ color: accent.hex }} className="mb-4" />
+          <h2 className="text-xl font-bold text-white">Drop Audio Files Here</h2>
+          <p className="text-xs text-neutral-400 mt-2">
+            Supports MP3, WAV, FLAC, OGG, M4A, AAC
           </p>
         </div>
       )}
 
-      {/* TOP STATUS / NAV BAR */}
+      {/* PURE FLAT TOP HEADER (52px, zero border, zero shadow) */}
       <header
-        className={`w-full h-14 px-4 flex items-center justify-between border-b shrink-0 z-30 ${
-          isAmoled ? "border-neutral-900 bg-black" : "border-neutral-200 bg-white"
+        className={`w-full max-w-sm mx-auto h-[52px] px-5 flex items-center justify-between shrink-0 z-30 ${
+          isAmoled ? "bg-black" : "bg-neutral-50"
         }`}
       >
-        {/* Brand / Logo */}
         <div className="flex items-center gap-2.5 min-w-0">
           <div
-            className="w-8 h-8 rounded-xl flex items-center justify-center font-mono font-black text-xs tracking-tighter shadow-md shrink-0"
+            className="w-8 h-8 rounded-xl flex items-center justify-center font-mono font-black text-xs tracking-tighter shrink-0"
             style={{
               backgroundColor: accent.hex,
-              color: isAmoled ? "#000000" : "#ffffff",
-              boxShadow: `0 0 12px ${accent.glow}`,
+              color: "#000000",
             }}
           >
             AE
@@ -833,88 +727,75 @@ export default function App() {
             <div className="flex items-center gap-1.5 truncate">
               <span className="font-extrabold text-xs tracking-wider">AETHER</span>
               <span
-                className="text-[9px] font-mono px-1.5 py-0.5 rounded-md font-semibold tracking-wider uppercase shrink-0 border"
+                className="text-[9px] font-mono px-1.5 py-0.5 rounded font-bold tracking-wider uppercase shrink-0"
                 style={{
-                  backgroundColor: `${accent.hex}15`,
-                  borderColor: `${accent.hex}40`,
+                  backgroundColor: `${accent.hex}20`,
                   color: accent.hex,
                 }}
               >
-                HI-RES
+                LOCAL
               </span>
             </div>
-            <p className="text-[10px] text-neutral-400 tracking-wide font-mono truncate">
-              0-Latency Engine
+            <p className="text-[10px] text-neutral-500 font-mono tabular-nums truncate">
+              {allTracks.length} {allTracks.length === 1 ? "track" : "tracks"} loaded
             </p>
           </div>
         </div>
 
-        {/* Right: Uniform Action Icons (All 36x36 rounded-xl) */}
+        {/* Right Flat Action Icons (36x36 rounded-xl, zero border) */}
         <div className="flex items-center gap-1.5 shrink-0 relative">
-          {/* Accent Color Palette Popover Button */}
           <button
             onClick={() => setIsPaletteOpen(!isPaletteOpen)}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
-                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+            className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+              isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
             }`}
             title="Choose Accent Color"
           >
             <span
-              className="w-4 h-4 rounded-full ring-2 ring-white/30 transition-transform shadow-sm"
+              className="w-3.5 h-3.5 rounded-full"
               style={{ backgroundColor: accent.hex }}
             />
           </button>
 
-          {/* Equalizer (10-Band EQ) */}
           <button
             onClick={() => setIsEqualizerOpen(true)}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
-                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+            className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+              isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
             }`}
             title="10-Band Equalizer"
           >
             <Sliders size={15} style={{ color: accent.hex }} />
           </button>
 
-          {/* Sonic Intelligence */}
           <button
             onClick={() => setIsSonicAiOpen(true)}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 text-neutral-300 hover:border-neutral-700"
-                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+            className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+              isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
             }`}
             title="Sonic Intelligence"
           >
             <Sparkles size={15} style={{ color: accent.hex }} />
           </button>
 
-          {/* Theme Toggle (AMOLED / Light) */}
           <button
             onClick={toggleTheme}
-            className={`w-9 h-9 flex items-center justify-center rounded-xl transition-transform active:scale-90 border ${
-              isAmoled
-                ? "bg-neutral-950 border-neutral-800 text-amber-400 hover:border-neutral-700"
-                : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+            className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+              isAmoled ? "bg-neutral-900 text-amber-400" : "bg-neutral-200 text-neutral-700"
             }`}
-            title={isAmoled ? "Switch to Light Mode" : "Switch to pure AMOLED Black"}
+            title="Toggle Theme"
           >
             {isAmoled ? <Sun size={15} /> : <Moon size={15} />}
           </button>
 
-          {/* Color Palette Popover Dropdown */}
+          {/* Flat Color Palette Dropdown */}
           {isPaletteOpen && (
             <div
-              className={`absolute top-11 right-0 z-50 p-2 rounded-xl border shadow-2xl flex flex-col gap-1.5 animate-in fade-in slide-in-from-top-1 w-44 ${
-                isAmoled ? "bg-black border-neutral-800 text-white" : "bg-white border-neutral-200 text-black"
+              className={`absolute top-11 right-0 z-50 p-2 rounded-xl flex flex-col gap-1 w-44 ${
+                isAmoled ? "bg-neutral-900 text-white" : "bg-white text-black"
               }`}
             >
-              <div className="text-[10px] font-mono text-neutral-400 px-1 font-semibold uppercase tracking-wider">
-                Accent Palette
+              <div className="text-[10px] font-mono text-neutral-400 px-2 py-1 font-semibold uppercase tracking-wider">
+                Accent Color
               </div>
               {ACCENT_COLORS.map((col) => (
                 <button
@@ -923,20 +804,25 @@ export default function App() {
                     setAccent(col);
                     setIsPaletteOpen(false);
                   }}
-                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors border ${
+                  className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors ${
                     accent.id === col.id
                       ? isAmoled
-                        ? "bg-neutral-900 border-neutral-700 font-bold"
-                        : "bg-neutral-100 border-neutral-300 font-bold"
-                      : "border-transparent hover:bg-neutral-900/40"
+                        ? "bg-black font-bold"
+                        : "bg-neutral-100 font-bold"
+                      : ""
                   }`}
                 >
                   <div className="flex items-center gap-2">
-                    <span className="w-3.5 h-3.5 rounded-full shrink-0" style={{ backgroundColor: col.hex }} />
+                    <span
+                      className="w-3.5 h-3.5 rounded-full shrink-0"
+                      style={{ backgroundColor: col.hex }}
+                    />
                     <span className="text-[11px] truncate">{col.name}</span>
                   </div>
                   {accent.id === col.id && (
-                    <span className="text-[11px] font-bold" style={{ color: col.hex }}>✓</span>
+                    <span className="text-[11px] font-bold" style={{ color: col.hex }}>
+                      ✓
+                    </span>
                   )}
                 </button>
               ))}
@@ -945,113 +831,171 @@ export default function App() {
         </div>
       </header>
 
-      {/* MAIN VIEWPORT */}
+      {/* MAIN SINGLE-SCREEN MOBILE STAGE */}
       <main
-        className={`flex-1 w-full max-w-sm mx-auto px-4 select-none ${
+        className={`flex-1 w-full max-w-sm mx-auto px-5 select-none ${
           activeNavTab === "now-playing"
-            ? "h-[calc(100dvh-56px-64px)] flex flex-col justify-between pt-1 pb-3 overflow-hidden"
-            : "overflow-y-auto py-4 pb-32"
+            ? "h-[calc(100dvh-52px-56px)] flex flex-col justify-between pt-2 pb-4 overflow-hidden"
+            : "overflow-y-auto py-3 pb-28"
         }`}
       >
         {activeNavTab === "now-playing" && (
           <div className="w-full h-full flex flex-col justify-between min-h-0">
-            {/* 1. Fluid Responsive Album Artwork with AMOLED Glow */}
-            <div className="flex-1 min-h-[110px] max-h-[240px] w-full flex items-center justify-center my-auto relative shrink">
-              <div className="relative h-full aspect-square max-h-[240px]">
-                {/* Ambient Accent Glow in AMOLED Mode */}
-                {isAmoled && (
-                  <div
-                    className="absolute -inset-2.5 rounded-2xl opacity-20 blur-xl transition-all duration-700 pointer-events-none"
-                    style={{ backgroundColor: accent.hex }}
-                  />
-                )}
-
-                {/* Main Album Card */}
+            {/* 1. Flat Artwork / Monogram Stage OR Phone File Picker Zero-State */}
+            <div className="flex-1 min-h-[120px] max-h-[220px] w-full flex items-center justify-center my-auto shrink">
+              {!currentTrack ? (
                 <div
-                  className={`relative w-full h-full rounded-2xl overflow-hidden border shadow-2xl transition-all duration-500 ${
-                    isAmoled
-                      ? "bg-neutral-950 border-neutral-800"
-                      : "bg-white border-neutral-200"
+                  className={`w-full h-full rounded-2xl p-4 flex flex-col items-center justify-center text-center ${
+                    isAmoled ? "bg-neutral-900" : "bg-neutral-200/70"
                   }`}
                 >
-                  <img
-                    src={currentTrack?.coverUrl}
-                    alt={currentTrack?.title}
-                    className={`w-full h-full object-cover transition-transform duration-700 ${
-                      isPlaying ? "scale-105" : "scale-100"
-                    }`}
-                  />
+                  <HardDrive size={26} style={{ color: accent.hex }} className="mb-2" />
+                  <h2 className="text-sm font-bold">Load Phone Audio</h2>
+                  <p className="text-[11px] text-neutral-400 mt-0.5 mb-3 max-w-[230px]">
+                    Pick audio files or scan a music folder from your phone to start listening.
+                  </p>
+                  <div className="w-full grid grid-cols-2 gap-2">
+                    <label
+                      className="h-10 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
+                      style={{ backgroundColor: accent.hex, color: "#000000" }}
+                    >
+                      <Upload size={14} />
+                      <span>Select Files</span>
+                      <input
+                        type="file"
+                        multiple
+                        accept="audio/*,.mp3,.flac,.wav,.m4a,.aac,.ogg,.opus"
+                        onChange={(e) =>
+                          e.target.files && handleUploadAudioFiles(e.target.files)
+                        }
+                        className="hidden"
+                      />
+                    </label>
 
-                  {/* Real-time Audio Synth Indicator */}
-                  {currentTrack?.isSynthetic && (
-                    <div className="absolute bottom-2 left-2 h-5 px-2 rounded-md text-[9px] font-mono font-medium backdrop-blur-md bg-black/70 text-white/90 border border-white/15 flex items-center gap-1">
-                      <Activity size={9} style={{ color: accent.hex }} />
-                      <span>SYNTH</span>
+                    <label
+                      className={`h-10 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform ${
+                        isAmoled ? "bg-black text-white" : "bg-white text-neutral-900"
+                      }`}
+                    >
+                      <FolderOpen size={14} style={{ color: accent.hex }} />
+                      <span>Scan Folder</span>
+                      <input
+                        type="file"
+                        {...({ webkitdirectory: "", directory: "" } as any)}
+                        multiple
+                        onChange={(e) =>
+                          e.target.files && handleUploadAudioFiles(e.target.files)
+                        }
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              ) : (
+                <div
+                  className={`relative h-full aspect-square max-h-[210px] rounded-2xl overflow-hidden flex flex-col items-center justify-center ${
+                    isAmoled ? "bg-neutral-900" : "bg-neutral-200"
+                  }`}
+                >
+                  {currentTrack.coverUrl ? (
+                    <img
+                      src={currentTrack.coverUrl}
+                      alt={currentTrack.title}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex flex-col items-center justify-center p-5 text-center select-none">
+                      <div
+                        className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3"
+                        style={{
+                          backgroundColor: `${accent.hex}18`,
+                          color: accent.hex,
+                        }}
+                      >
+                        <Music size={28} />
+                      </div>
+                      <span
+                        className="text-[10px] font-mono font-bold uppercase tracking-widest px-2 py-0.5 rounded"
+                        style={{
+                          backgroundColor: accent.hex,
+                          color: "#000000",
+                        }}
+                      >
+                        {currentTrack.genre || "LOCAL AUDIO"}
+                      </span>
+                      <span className="text-[11px] font-mono text-neutral-500 mt-2 truncate max-w-full">
+                        {currentTrack.folderPath || "/Phone Storage"}
+                      </span>
                     </div>
                   )}
                 </div>
-              </div>
+              )}
             </div>
 
             {/* 2. Track Metadata & Quick Action Buttons */}
-            <div className="w-full shrink-0 flex items-center justify-between gap-2 my-1 px-1">
+            <div className="w-full shrink-0 flex items-center justify-between gap-2 my-1">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-1.5 mb-0.5">
                   <span
                     className="text-[10px] font-mono font-bold uppercase tracking-wider"
                     style={{ color: accent.hex }}
                   >
-                    {currentTrack?.genre || "Electronic"}
+                    {currentTrack ? currentTrack.genre || "LOCAL FILE" : "READY"}
                   </span>
-                  {currentTrack?.bpm && (
-                    <span className="text-[10px] text-neutral-400 font-mono">
-                      &bull; {currentTrack.bpm} BPM
+                  {currentTrack?.folderPath && (
+                    <span className="text-[10px] text-neutral-500 font-mono truncate">
+                      · {currentTrack.folderPath}
                     </span>
                   )}
                 </div>
 
-                <h1 className="text-lg xs:text-xl font-bold tracking-tight text-white truncate leading-tight">
-                  {currentTrack?.title || "No Track Loaded"}
+                <h1 className="text-lg font-bold tracking-tight truncate leading-tight">
+                  {currentTrack?.title || "No Track Selected"}
                 </h1>
 
-                <p className="text-xs font-medium text-neutral-400 truncate">
-                  {currentTrack?.artist || "Unknown Artist"} &bull; {currentTrack?.album}
+                <p className="text-xs font-medium text-neutral-400 truncate mt-0.5">
+                  {currentTrack
+                    ? `${currentTrack.artist} · ${currentTrack.album}`
+                    : "Tap Select Files or open File Explorer below"}
                 </p>
               </div>
 
-              {/* Action Buttons: Add to Playlist & Favorite */}
-              <div className="flex items-center gap-1 shrink-0">
+              <div className="flex items-center gap-1.5 shrink-0">
                 <button
                   onClick={() => currentTrack && setAddToPlaylistTrack(currentTrack)}
-                  className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
-                    isAmoled
-                      ? "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white"
-                      : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
+                  disabled={!currentTrack}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40 ${
+                    isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
                   }`}
                   title="Add to Playlist"
                 >
-                  <ListPlus size={16} />
+                  <ListPlus size={17} />
                 </button>
                 <button
                   onClick={() => currentTrack && toggleFavorite(currentTrack.id)}
-                  className={`w-9 h-9 rounded-xl border flex items-center justify-center transition-all active:scale-90 ${
+                  disabled={!currentTrack}
+                  className={`w-10 h-10 rounded-xl flex items-center justify-center active:scale-95 transition-transform disabled:opacity-40 ${
                     currentTrack && favorites.has(currentTrack.id)
-                      ? "text-rose-500 bg-rose-500/15 border-rose-500/40"
+                      ? "text-rose-500 bg-rose-500/15"
                       : isAmoled
-                      ? "bg-neutral-950 border-neutral-800 text-neutral-400 hover:text-white"
-                      : "bg-neutral-100 border-neutral-200 text-neutral-600 hover:text-black"
+                      ? "bg-neutral-900 text-neutral-300"
+                      : "bg-neutral-200 text-neutral-700"
                   }`}
                   title="Favorite Track"
                 >
                   <Heart
-                    size={16}
-                    fill={currentTrack && favorites.has(currentTrack.id) ? "currentColor" : "none"}
+                    size={17}
+                    fill={
+                      currentTrack && favorites.has(currentTrack.id)
+                        ? "currentColor"
+                        : "none"
+                    }
                   />
                 </button>
               </div>
             </div>
 
-            {/* 3. Interactive Waveform Seekbar */}
+            {/* 3. Pure Flat Waveform Seekbar */}
             <div className="w-full shrink-0 my-1">
               <WaveformSeekbar
                 track={currentTrack}
@@ -1067,112 +1011,98 @@ export default function App() {
               />
             </div>
 
-            {/* 4. Core Mobile Playback Controls */}
-            <div className="w-full flex items-center justify-between shrink-0 my-1 px-1">
-              {/* Shuffle */}
+            {/* 4. Flat Transport Controls (Elevated with clean spacing) */}
+            <div className="w-full flex items-center justify-between shrink-0 my-1">
               <button
                 onClick={() => setIsShuffle(!isShuffle)}
-                className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                className={`w-11 h-11 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
                   isShuffle
-                    ? "text-black border-transparent shadow"
+                    ? "text-black"
                     : isAmoled
-                    ? "border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-white"
-                    : "border-neutral-200 bg-neutral-100 text-neutral-600 hover:text-black"
+                    ? "bg-neutral-900 text-neutral-400"
+                    : "bg-neutral-200 text-neutral-600"
                 }`}
                 style={isShuffle ? { backgroundColor: accent.hex } : undefined}
                 title="Shuffle Queue"
               >
-                <Shuffle size={16} />
+                <Shuffle size={17} />
               </button>
 
-              {/* Previous */}
               <button
                 onClick={skipPrevious}
-                className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-transform active:scale-95 ${
-                  isAmoled
-                    ? "border-neutral-800 bg-neutral-950 text-white"
-                    : "border-neutral-200 bg-neutral-100 text-neutral-900"
+                className={`w-12 h-12 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+                  isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-900"
                 }`}
                 title="Previous Track"
               >
                 <SkipBack size={20} />
               </button>
 
-              {/* Big Touch Play / Pause Button */}
+              {/* Pure Flat Solid Play / Pause Button (Zero shadow, zero glow) */}
               <button
                 onClick={togglePlayPause}
-                className="w-14 h-14 rounded-2xl flex items-center justify-center transition-all duration-200 transform active:scale-90 shadow-xl"
+                className="w-16 h-16 rounded-2xl flex items-center justify-center active:scale-95 transition-transform"
                 style={{
                   backgroundColor: accent.hex,
-                  color: isAmoled ? "#000000" : "#ffffff",
-                  boxShadow: `0 6px 20px ${accent.glow}`,
+                  color: "#000000",
                 }}
                 title={isPlaying ? "Pause" : "Play"}
               >
                 {isPlaying ? (
-                  <Pause size={24} fill="currentColor" />
+                  <Pause size={26} fill="currentColor" />
                 ) : (
-                  <Play size={24} fill="currentColor" className="ml-0.5" />
+                  <Play size={26} fill="currentColor" className="ml-0.5" />
                 )}
               </button>
 
-              {/* Next */}
               <button
                 onClick={skipNext}
-                className={`w-12 h-12 flex items-center justify-center rounded-xl border transition-transform active:scale-95 ${
-                  isAmoled
-                    ? "border-neutral-800 bg-neutral-950 text-white"
-                    : "border-neutral-200 bg-neutral-100 text-neutral-900"
+                className={`w-12 h-12 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
+                  isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-900"
                 }`}
                 title="Next Track"
               >
                 <SkipForward size={20} />
               </button>
 
-              {/* Repeat Mode */}
               <button
                 onClick={() => {
                   if (repeatMode === "off") setRepeatMode("all");
                   else if (repeatMode === "all") setRepeatMode("one");
                   else setRepeatMode("off");
                 }}
-                className={`w-11 h-11 flex items-center justify-center rounded-xl border transition-all active:scale-95 ${
+                className={`w-11 h-11 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
                   repeatMode !== "off"
-                    ? "text-black border-transparent shadow"
+                    ? "text-black"
                     : isAmoled
-                    ? "border-neutral-800 bg-neutral-950 text-neutral-400 hover:text-white"
-                    : "border-neutral-200 bg-neutral-100 text-neutral-600 hover:text-black"
+                    ? "bg-neutral-900 text-neutral-400"
+                    : "bg-neutral-200 text-neutral-600"
                 }`}
                 style={repeatMode !== "off" ? { backgroundColor: accent.hex } : undefined}
                 title={`Repeat: ${repeatMode.toUpperCase()}`}
               >
-                {repeatMode === "one" ? <Repeat1 size={16} /> : <Repeat size={16} />}
+                {repeatMode === "one" ? <Repeat1 size={17} /> : <Repeat size={17} />}
               </button>
             </div>
 
-            {/* 5. Sleek Integrated Volume & Quick Tools Utility Bar */}
+            {/* 5. Flat Volume & Utility Strip */}
             <div
-              className={`w-full h-10 rounded-xl border px-2.5 flex items-center justify-between gap-2 shrink-0 mb-1 transition-colors ${
-                isAmoled
-                  ? "bg-neutral-950 border-neutral-800"
-                  : "bg-neutral-50 border-neutral-200"
+              className={`w-full h-10 rounded-xl px-3 flex items-center justify-between gap-2.5 shrink-0 ${
+                isAmoled ? "bg-neutral-900" : "bg-neutral-200/80"
               }`}
             >
-              {/* Volume slider */}
               <div className="flex items-center gap-2 flex-1 min-w-0">
                 <button
                   onClick={toggleMute}
-                  className={`p-1 rounded-md transition-colors ${
-                    isAmoled ? "text-neutral-400 hover:text-white" : "text-neutral-500 hover:text-neutral-900"
-                  }`}
+                  className="p-1 text-neutral-400 hover:text-white transition-colors"
                   title="Mute / Unmute"
                 >
                   {isMuted || volume === 0 ? (
-                    <VolumeX size={14} />
+                    <VolumeX size={15} />
                   ) : volume < 0.5 ? (
-                    <Volume1 size={14} />
+                    <Volume1 size={15} />
                   ) : (
-                    <Volume2 size={14} />
+                    <Volume2 size={15} />
                   )}
                 </button>
 
@@ -1192,45 +1122,34 @@ export default function App() {
                 </span>
               </div>
 
-              {/* Subtle Vertical Divider */}
-              <div className={`h-4 w-px shrink-0 ${isAmoled ? "bg-neutral-800" : "bg-neutral-200"}`} />
-
-              {/* Quick Actions Strip */}
               <div className="flex items-center gap-1.5 shrink-0">
-                {/* Synchronized Lyrics */}
                 <button
                   onClick={() => setIsLyricsOpen(true)}
-                  className={`h-7 px-2 rounded-lg border text-[10px] font-mono font-medium flex items-center gap-1 transition-all active:scale-95 ${
-                    isAmoled
-                      ? "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:text-white"
-                      : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+                  className={`h-7 px-2.5 rounded-lg text-[10px] font-mono font-semibold flex items-center gap-1 active:scale-95 transition-transform ${
+                    isAmoled ? "bg-black text-neutral-300" : "bg-white text-neutral-700"
                   }`}
-                  title="Synchronized Lyrics"
                 >
                   <Mic2 size={11} style={{ color: accent.hex }} />
                   <span>Lyrics</span>
                 </button>
 
-                {/* Sleep Timer with Cycle Tap */}
                 <button
                   onClick={cycleSleepTimer}
-                  className={`h-7 px-2 rounded-lg border text-[10px] font-mono font-medium flex items-center gap-1 transition-all active:scale-95 ${
+                  className={`h-7 px-2.5 rounded-lg text-[10px] font-mono font-semibold flex items-center gap-1 active:scale-95 transition-transform ${
                     sleepTimerMinutes !== null
-                      ? isAmoled
-                        ? "border-amber-500/60 text-amber-400 bg-amber-500/10 font-bold"
-                        : "border-amber-500/60 text-amber-600 bg-amber-50 font-bold"
+                      ? "text-black font-bold"
                       : isAmoled
-                      ? "bg-neutral-900/60 border-neutral-800 text-neutral-300 hover:text-white"
-                      : "bg-neutral-100 border-neutral-200 text-neutral-700 hover:bg-neutral-200"
+                      ? "bg-black text-neutral-300"
+                      : "bg-white text-neutral-700"
                   }`}
-                  title={
+                  style={
                     sleepTimerMinutes !== null
-                      ? `Sleep timer: ${Math.ceil((sleepTimerRemaining || 0) / 60)}m left (Tap to cycle/disable)`
-                      : "Set Sleep Timer"
+                      ? { backgroundColor: accent.hex }
+                      : undefined
                   }
                 >
-                  <Clock size={11} className={sleepTimerMinutes !== null ? "animate-spin" : ""} />
-                  <span>
+                  <Clock size={11} />
+                  <span className="tabular-nums">
                     {sleepTimerRemaining !== null
                       ? `${Math.ceil(sleepTimerRemaining / 60)}m`
                       : "Timer"}
@@ -1252,9 +1171,12 @@ export default function App() {
             onSelectPlaylist={(plId) => setActivePlaylistId(plId)}
             onPlayPlaylist={(pl, shuffle) => {
               if (pl.tracks.length > 0) {
-                const tracksToPlay = shuffle ? [...pl.tracks].sort(() => Math.random() - 0.5) : pl.tracks;
+                const tracksToPlay = shuffle
+                  ? [...pl.tracks].sort(() => Math.random() - 0.5)
+                  : pl.tracks;
                 setQueue(tracksToPlay);
                 setCurrentTrackIndex(0);
+                setDuration(tracksToPlay[0].duration || 0);
                 globalAudioEngine.playTrack(tracksToPlay[0], 0);
               }
             }}
@@ -1264,7 +1186,7 @@ export default function App() {
                 name,
                 description: desc || "Custom audio collection",
                 tracks: [],
-                coverUrl: cover || "https://images.unsplash.com/photo-1618005182384-a83a8bd57fbe?auto=format&fit=crop&w=600&q=80",
+                coverUrl: cover || "",
                 isCustom: true,
               };
               setPlaylists((prev) => [...prev, newPl]);
@@ -1274,17 +1196,13 @@ export default function App() {
             }}
             onReorderTrack={handleReorderTrackInPlaylist}
             onRemoveTrackFromPlaylist={handleRemoveTrackFromPlaylist}
-            onPlayTrack={(track) => {
-              handlePlayTrackFromMemory(track);
-            }}
-            onEnqueueTrack={(track) => {
-              handleEnqueueTrackFromMemory(track);
-            }}
+            onPlayTrack={handlePlayTrackFromMemory}
+            onEnqueueTrack={handleEnqueueTrackFromMemory}
           />
         )}
       </main>
 
-      {/* PERMANENT PLAYLIST DOCK (Visible on Playlists tab when no modal is open) */}
+      {/* PERMANENT PLAYLIST DOCK */}
       {activeNavTab === "playlists" && !isFileManagerOpen && !isQueueOpen && (
         <PermanentPlaylistBar
           playlists={playlists}
@@ -1297,14 +1215,18 @@ export default function App() {
             if (pl && pl.tracks.length > 0) {
               setQueue(pl.tracks);
               setCurrentTrackIndex(0);
+              setDuration(pl.tracks[0].duration || 0);
               globalAudioEngine.playTrack(pl.tracks[0], 0);
             }
           }}
           onPlayPlaylist={(pl, shuffle) => {
             if (pl.tracks.length > 0) {
-              const tracksToPlay = shuffle ? [...pl.tracks].sort(() => Math.random() - 0.5) : pl.tracks;
+              const tracksToPlay = shuffle
+                ? [...pl.tracks].sort(() => Math.random() - 0.5)
+                : pl.tracks;
               setQueue(tracksToPlay);
               setCurrentTrackIndex(0);
+              setDuration(tracksToPlay[0].duration || 0);
               globalAudioEngine.playTrack(tracksToPlay[0], 0);
             }
           }}
@@ -1327,7 +1249,7 @@ export default function App() {
         />
       )}
 
-      {/* MINI PLAYER BAR (Appears when browsing File Explorer, Playlists, or Queue) */}
+      {/* FLAT MINI PLAYER BAR */}
       {(activeNavTab !== "now-playing" || isFileManagerOpen || isQueueOpen) && currentTrack && (
         <div
           onClick={() => {
@@ -1335,61 +1257,56 @@ export default function App() {
             setIsFileManagerOpen(false);
             setIsQueueOpen(false);
           }}
-          className={`fixed bottom-16 left-0 right-0 z-[55] h-12 border-t backdrop-blur-xl cursor-pointer transition-all shadow-xl select-none ${
-            isAmoled
-              ? "bg-black/95 border-neutral-800 text-white"
-              : "bg-white/95 border-neutral-200 text-neutral-900"
+          className={`fixed bottom-14 left-0 right-0 z-[55] h-12 cursor-pointer select-none ${
+            isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-900"
           }`}
         >
-          {/* Top miniature glowing progress bar */}
           <div className="absolute top-0 left-0 right-0 h-0.5 bg-neutral-800">
             <div
               className="h-full transition-all"
               style={{
                 width: `${(currentTime / (duration || 1)) * 100}%`,
                 backgroundColor: accent.hex,
-                boxShadow: `0 0 8px ${accent.glow}`,
               }}
             />
           </div>
 
           <div className="w-full max-w-sm mx-auto h-full px-4 flex items-center justify-between">
             <div className="flex items-center gap-2.5 min-w-0">
-              <img
-                src={currentTrack.coverUrl}
-                alt={currentTrack.title}
-                className="w-8 h-8 rounded-xl object-cover shrink-0 shadow-md"
-              />
+              <div
+                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+                style={{ backgroundColor: accent.hex, color: "#000000" }}
+              >
+                <Disc size={16} className={isPlaying ? "animate-spin" : ""} />
+              </div>
               <div className="min-w-0 truncate">
-                <div className="text-xs font-bold truncate flex items-center gap-1.5">
-                  <span className="truncate">{currentTrack.title}</span>
-                  {isPlaying && (
-                    <span className="w-1.5 h-1.5 rounded-full shrink-0 animate-ping" style={{ backgroundColor: accent.hex }} />
-                  )}
-                </div>
-                <div className="text-[10px] text-neutral-400 truncate font-medium">
-                  {currentTrack.artist} &bull; {currentTrack.album}
+                <div className="text-xs font-bold truncate">{currentTrack.title}</div>
+                <div className="text-[10px] text-neutral-400 truncate">
+                  {currentTrack.artist}
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1.5 shrink-0" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="flex items-center gap-1.5 shrink-0"
+              onClick={(e) => e.stopPropagation()}
+            >
               <button
                 onClick={togglePlayPause}
-                className="w-8 h-8 rounded-xl flex items-center justify-center transition-transform active:scale-90 shadow"
-                style={{ backgroundColor: accent.hex, color: isAmoled ? "#000000" : "#ffffff" }}
-                title={isPlaying ? "Pause" : "Play"}
+                className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
+                style={{ backgroundColor: accent.hex, color: "#000000" }}
               >
-                {isPlaying ? <Pause size={14} fill="currentColor" /> : <Play size={14} fill="currentColor" className="ml-0.5" />}
+                {isPlaying ? (
+                  <Pause size={14} fill="currentColor" />
+                ) : (
+                  <Play size={14} fill="currentColor" className="ml-0.5" />
+                )}
               </button>
               <button
                 onClick={skipNext}
-                className={`w-8 h-8 rounded-xl flex items-center justify-center border transition-colors ${
-                  isAmoled
-                    ? "border-neutral-800 bg-neutral-950 text-neutral-300 hover:text-white"
-                    : "border-neutral-200 bg-neutral-100 text-neutral-700"
+                className={`w-8 h-8 rounded-lg flex items-center justify-center ${
+                  isAmoled ? "bg-black text-neutral-300" : "bg-white text-neutral-700"
                 }`}
-                title="Next Track"
               >
                 <SkipForward size={14} />
               </button>
@@ -1398,7 +1315,7 @@ export default function App() {
         </div>
       )}
 
-      {/* FIXED BOTTOM NAVIGATION BAR */}
+      {/* FLAT BOTTOM NAVIGATION BAR (56px) */}
       <BottomNavBar
         activeTab={activeNavTab}
         onSelectTab={(tab) => {
@@ -1529,6 +1446,7 @@ export default function App() {
           if (pl && pl.tracks.length > 0) {
             setQueue(pl.tracks);
             setCurrentTrackIndex(0);
+            setDuration(pl.tracks[0].duration || 0);
             globalAudioEngine.playTrack(pl.tracks[0], 0);
           }
         }}

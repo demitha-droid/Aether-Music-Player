@@ -26,6 +26,7 @@ export class AudioEngine {
   private isSynthetic: boolean = false;
   private isPlaying: boolean = false;
   private currentTrack: Track | null = null;
+  private currentObjectUrl: string | null = null;
   private syntheticTime: number = 0;
   private syntheticDuration: number = 180;
   private synthInterval: number | null = null;
@@ -45,15 +46,28 @@ export class AudioEngine {
 
   constructor() {
     this.audioElement = new Audio();
-    this.audioElement.crossOrigin = "anonymous";
     this.audioElement.preload = "auto";
 
     this.audioElement.addEventListener("timeupdate", () => {
       if (!this.isSynthetic && this.onTimeUpdate) {
         const curr = this.audioElement.currentTime;
-        const tot = this.audioElement.duration || 0;
+        const tot =
+          Number.isFinite(this.audioElement.duration) && this.audioElement.duration > 0
+            ? this.audioElement.duration
+            : this.currentTrack?.duration || 0;
         this.onTimeUpdate(curr, tot);
         this.checkCrossfadeWindow(curr, tot);
+      }
+    });
+
+    this.audioElement.addEventListener("loadedmetadata", () => {
+      if (!this.isSynthetic && this.onTimeUpdate) {
+        const curr = this.audioElement.currentTime;
+        const tot =
+          Number.isFinite(this.audioElement.duration) && this.audioElement.duration > 0
+            ? this.audioElement.duration
+            : this.currentTrack?.duration || 0;
+        this.onTimeUpdate(curr, tot);
       }
     });
 
@@ -235,7 +249,7 @@ export class AudioEngine {
     const wasCrossfading = this.isCrossfading;
     this.currentTrack = track;
     this.crossfadeTriggeredForTrackId = null;
-    this.isSynthetic = !!track.isSynthetic;
+    this.isSynthetic = Boolean(track.isSynthetic && !track.file && !track.audioUrl);
 
     // Apply smooth crossfade-in or gapless micro-envelope
     if (this.crossfadeGain && this.ctx) {
@@ -258,7 +272,7 @@ export class AudioEngine {
     }
 
     if (this.isSynthetic) {
-      // Synthetic playback mode
+      // Synthetic playback mode (only for Kotlin DSL synthesized tracks)
       this.audioElement.pause();
       this.syntheticTime = startTime;
       this.syntheticDuration = track.duration || 180;
@@ -268,33 +282,36 @@ export class AudioEngine {
       this.isPlaying = true;
       this.onPlayStateChange?.(true);
     } else {
-      // Audio element / File / URL playback mode
+      // Real local File / URL playback mode
       this.stopSyntheticTimer();
       this.synthEngine?.stop();
 
+      if (this.currentObjectUrl) {
+        URL.revokeObjectURL(this.currentObjectUrl);
+        this.currentObjectUrl = null;
+      }
+
       if (track.file) {
-        const objectUrl = URL.createObjectURL(track.file);
-        this.audioElement.src = objectUrl;
+        this.audioElement.removeAttribute("crossorigin");
+        this.currentObjectUrl = URL.createObjectURL(track.file);
+        this.audioElement.src = this.currentObjectUrl;
       } else if (track.audioUrl) {
         this.audioElement.src = track.audioUrl;
       }
 
-      this.audioElement.currentTime = startTime;
+      this.audioElement.load();
+      if (startTime > 0) {
+        this.audioElement.currentTime = startTime;
+      }
+
       try {
         await this.audioElement.play();
         this.isPlaying = true;
         this.onPlayStateChange?.(true);
       } catch (err) {
-        console.warn("Audio element play error, falling back to procedural synthesis:", err);
-        // Fallback to synthesis smoothly
-        this.isSynthetic = true;
-        this.syntheticTime = startTime;
-        this.syntheticDuration = track.duration || 180;
-        this.synthEngine?.setStyle("synthwave");
-        this.synthEngine?.start();
-        this.startSyntheticTimer();
-        this.isPlaying = true;
-        this.onPlayStateChange?.(true);
+        console.warn("Audio element play interrupted or failed:", err);
+        this.isPlaying = false;
+        this.onPlayStateChange?.(false);
       }
     }
   }
@@ -311,16 +328,19 @@ export class AudioEngine {
       this.isPlaying = true;
       this.onPlayStateChange?.(true);
     } else {
+      if (!this.audioElement.src && this.currentTrack) {
+        await this.playTrack(this.currentTrack, this.audioElement.currentTime || 0);
+        return;
+      }
       try {
         await this.audioElement.play();
-      } catch {
-        // Fallback if audio element fails
-        this.isSynthetic = true;
-        this.synthEngine?.start();
-        this.startSyntheticTimer();
+        this.isPlaying = true;
+        this.onPlayStateChange?.(true);
+      } catch (err) {
+        console.warn("Resume playback failed:", err);
+        this.isPlaying = false;
+        this.onPlayStateChange?.(false);
       }
-      this.isPlaying = true;
-      this.onPlayStateChange?.(true);
     }
   }
 
