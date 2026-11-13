@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Play,
   Pause,
@@ -49,6 +49,9 @@ import {
   loadStoredTracks,
   saveTracksToDB,
   deleteTrackFromDB,
+  loadStoredFolders,
+  saveFolderToDB,
+  deleteFolderFromDB,
   probeAudioDuration,
   parseTrackFilename,
   buildFolderHierarchy,
@@ -64,14 +67,21 @@ import { PlaylistHub } from "./components/PlaylistHub";
 import { AddToPlaylistModal } from "./components/AddToPlaylistModal";
 import { PermanentPlaylistBar } from "./components/PermanentPlaylistBar";
 import { WaveformSeekbar } from "./components/WaveformSeekbar";
+import { HyperIsland } from "./components/HyperIsland";
+import {
+  registerMediaSessionHandlers,
+  updateMediaSessionMetadata,
+  updateMediaSessionPlaybackState,
+  updateMediaSessionPosition,
+} from "./services/mediaSession";
 
 const ACCENT_COLORS: AccentColor[] = [
   {
-    id: "cyan",
-    name: "Electric Cyan",
-    hex: "#00f2fe",
-    glow: "rgba(0, 242, 254, 0)",
-    activeBg: "bg-cyan-500",
+    id: "white",
+    name: "Pure White",
+    hex: "#ffffff",
+    glow: "rgba(255, 255, 255, 0)",
+    activeBg: "bg-white",
   },
   {
     id: "emerald",
@@ -102,11 +112,11 @@ const ACCENT_COLORS: AccentColor[] = [
     activeBg: "bg-rose-500",
   },
   {
-    id: "mono",
-    name: "Pure Monochrome",
-    hex: "#e2e8f0",
-    glow: "rgba(226, 232, 240, 0)",
-    activeBg: "bg-slate-200",
+    id: "cyan",
+    name: "Electric Cyan",
+    hex: "#00f2fe",
+    glow: "rgba(0, 242, 254, 0)",
+    activeBg: "bg-cyan-500",
   },
 ];
 
@@ -171,20 +181,27 @@ export default function App() {
 
   const currentTrack = queue[currentTrackIndex] || null;
 
-  // Load persisted phone audio files from IndexedDB on startup
+  // Load persisted phone audio files & folders from IndexedDB on startup
   useEffect(() => {
     let mounted = true;
-    loadStoredTracks().then((stored) => {
-      if (!mounted || stored.length === 0) return;
-      setAllTracks(stored);
-      setQueue(stored);
-      setCurrentTrackIndex(0);
-      setDuration(stored[0]?.duration || 0);
-      setMemoryFolders((prev) => buildFolderHierarchy(stored, prev));
-      setPlaylists((prev) =>
-        prev.map((pl) => (pl.id === "playlist-all" ? { ...pl, tracks: stored } : pl))
-      );
-    });
+    Promise.all([loadStoredTracks(), loadStoredFolders()]).then(
+      ([storedTracks, storedFolders]) => {
+        if (!mounted) return;
+        setMemoryFolders((prev) =>
+          buildFolderHierarchy(storedTracks, [...prev, ...storedFolders])
+        );
+        if (storedTracks.length === 0) return;
+        setAllTracks(storedTracks);
+        setQueue(storedTracks);
+        setCurrentTrackIndex(0);
+        setDuration(storedTracks[0]?.duration || 0);
+        setPlaylists((prev) =>
+          prev.map((pl) =>
+            pl.id === "playlist-all" ? { ...pl, tracks: storedTracks } : pl
+          )
+        );
+      }
+    );
     return () => {
       mounted = false;
     };
@@ -226,6 +243,119 @@ export default function App() {
       handleTrackEnded();
     };
   }, [currentTrackIndex, queue, repeatMode, isShuffle]);
+
+  // OS HyperIsland / Lockscreen MediaSession Integration
+  const mediaCallbacksRef = useRef({
+    play: () => {},
+    pause: () => {},
+    prev: () => {},
+    next: () => {},
+    seekTo: (_t: number) => {},
+    seekBy: (_d: number) => {},
+    stop: () => {},
+  });
+
+  mediaCallbacksRef.current = {
+    play: () => {
+      if (currentTrack) globalAudioEngine.resume();
+    },
+    pause: () => globalAudioEngine.pause(),
+    prev: () => skipPrevious(),
+    next: () => skipNext(),
+    seekTo: (t: number) => handleSeek(t),
+    seekBy: (offset: number) =>
+      handleSeek(Math.max(0, Math.min(duration || 0, currentTime + offset))),
+    stop: () => {
+      globalAudioEngine.pause();
+      handleSeek(0);
+    },
+  };
+
+  useEffect(() => {
+    registerMediaSessionHandlers({
+      onPlay: () => mediaCallbacksRef.current.play(),
+      onPause: () => mediaCallbacksRef.current.pause(),
+      onPrevious: () => mediaCallbacksRef.current.prev(),
+      onNext: () => mediaCallbacksRef.current.next(),
+      onSeekTo: (t) => mediaCallbacksRef.current.seekTo(t),
+      onSeekBy: (d) => mediaCallbacksRef.current.seekBy(d),
+      onStop: () => mediaCallbacksRef.current.stop(),
+    });
+  }, []);
+
+  useEffect(() => {
+    updateMediaSessionMetadata(currentTrack, accent.hex);
+  }, [currentTrack?.id, accent.hex]);
+
+  useEffect(() => {
+    updateMediaSessionPlaybackState(isPlaying, Boolean(currentTrack));
+  }, [isPlaying, Boolean(currentTrack)]);
+
+  const lastPositionSyncRef = useRef<number>(0);
+  useEffect(() => {
+    const now = Date.now();
+    if (now - lastPositionSyncRef.current >= 1500 || !isPlaying) {
+      lastPositionSyncRef.current = now;
+      updateMediaSessionPosition(currentTime, duration, playbackRate);
+    }
+  }, [currentTime, duration, playbackRate, isPlaying]);
+
+  // Mobile Back button (popstate) handling for sub-views & modals
+  const subViewOpen =
+    activeNavTab !== "now-playing" ||
+    isFileManagerOpen ||
+    isQueueOpen ||
+    isEqualizerOpen ||
+    isLyricsOpen ||
+    isKotlinStudioOpen ||
+    isSonicAiOpen ||
+    addToPlaylistTrack !== null;
+
+  const subViewRef = useRef(subViewOpen);
+  subViewRef.current = subViewOpen;
+  const pushedHistoryRef = useRef(false);
+
+  useEffect(() => {
+    if (subViewOpen && !pushedHistoryRef.current) {
+      window.history.pushState({ aetherSubView: true }, "");
+      pushedHistoryRef.current = true;
+    } else if (!subViewOpen) {
+      pushedHistoryRef.current = false;
+    }
+  }, [subViewOpen]);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      pushedHistoryRef.current = false;
+      if (addToPlaylistTrack !== null) {
+        setAddToPlaylistTrack(null);
+      } else if (isEqualizerOpen) {
+        setIsEqualizerOpen(false);
+      } else if (isLyricsOpen) {
+        setIsLyricsOpen(false);
+      } else if (isKotlinStudioOpen) {
+        setIsKotlinStudioOpen(false);
+      } else if (isSonicAiOpen) {
+        setIsSonicAiOpen(false);
+      } else if (isFileManagerOpen || isQueueOpen || activeNavTab !== "now-playing") {
+        setIsFileManagerOpen(false);
+        setIsQueueOpen(false);
+        setActiveNavTab("now-playing");
+      }
+    };
+
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, [
+    addToPlaylistTrack,
+    isEqualizerOpen,
+    isLyricsOpen,
+    isKotlinStudioOpen,
+    isSonicAiOpen,
+    isFileManagerOpen,
+    isQueueOpen,
+    activeNavTab,
+  ]);
 
   const handleTrackEnded = () => {
     if (repeatMode === "one") {
@@ -466,7 +596,14 @@ export default function App() {
       parentId: parent?.id || "folder-root",
       trackIds: [],
     };
+    saveFolderToDB(newFolder);
     setMemoryFolders((prev) => [...prev, newFolder]);
+  };
+
+  const handleDeleteFolder = (folderId: string) => {
+    if (folderId === "folder-root") return;
+    deleteFolderFromDB(folderId);
+    setMemoryFolders((prev) => prev.filter((f) => f.id !== folderId));
   };
 
   const handleDeleteTrackFromMemory = (trackId: string) => {
@@ -685,13 +822,16 @@ export default function App() {
   };
 
   const isAmoled = theme === "amoled";
+  const isHyperIslandVisible =
+    (activeNavTab !== "now-playing" || isFileManagerOpen || isQueueOpen) &&
+    currentTrack !== null;
 
   return (
     <div
       onDragOver={handleDragOver}
       onDragLeave={handleDragLeave}
       onDrop={handleDrop}
-      className={`h-[100dvh] w-full flex flex-col font-sans select-none relative overflow-hidden ${
+      className={`h-[100dvh] w-full flex flex-col pt-safe font-sans select-none relative overflow-hidden ${
         isAmoled ? "bg-black text-white" : "bg-neutral-50 text-neutral-900"
       }`}
     >
@@ -709,6 +849,8 @@ export default function App() {
       {/* PURE FLAT TOP HEADER (52px, zero border, zero shadow) */}
       <header
         className={`w-full max-w-sm mx-auto h-[52px] px-5 flex items-center justify-between shrink-0 z-30 ${
+          isHyperIslandVisible ? "mt-[52px]" : ""
+        } ${
           isAmoled ? "bg-black" : "bg-neutral-50"
         }`}
       >
@@ -833,11 +975,16 @@ export default function App() {
 
       {/* MAIN SINGLE-SCREEN MOBILE STAGE */}
       <main
-        className={`flex-1 w-full max-w-sm mx-auto px-5 select-none ${
+        className={`flex-1 min-h-0 w-full max-w-sm mx-auto px-5 select-none ${
           activeNavTab === "now-playing"
-            ? "h-[calc(100dvh-52px-56px)] flex flex-col justify-between pt-2 pb-4 overflow-hidden"
+            ? "flex flex-col justify-between pt-2 overflow-hidden"
             : "overflow-y-auto py-3 pb-28"
         }`}
+        style={
+          activeNavTab === "now-playing"
+            ? { paddingBottom: "calc(4.25rem + env(safe-area-inset-bottom, 0px))" }
+            : undefined
+        }
       >
         {activeNavTab === "now-playing" && (
           <div className="w-full h-full flex flex-col justify-between min-h-0">
@@ -1249,70 +1396,23 @@ export default function App() {
         />
       )}
 
-      {/* FLAT MINI PLAYER BAR */}
-      {(activeNavTab !== "now-playing" || isFileManagerOpen || isQueueOpen) && currentTrack && (
-        <div
-          onClick={() => {
+      {/* IN-APP HYPERISLAND PILL (Docks at top when backing away from Now Playing) */}
+      {isHyperIslandVisible && (
+        <HyperIsland
+          track={currentTrack}
+          isPlaying={isPlaying}
+          currentTime={currentTime}
+          duration={duration}
+          theme={theme}
+          accent={accent}
+          onExpand={() => {
             setActiveNavTab("now-playing");
             setIsFileManagerOpen(false);
             setIsQueueOpen(false);
           }}
-          className={`fixed bottom-14 left-0 right-0 z-[55] h-12 cursor-pointer select-none ${
-            isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-900"
-          }`}
-        >
-          <div className="absolute top-0 left-0 right-0 h-0.5 bg-neutral-800">
-            <div
-              className="h-full transition-all"
-              style={{
-                width: `${(currentTime / (duration || 1)) * 100}%`,
-                backgroundColor: accent.hex,
-              }}
-            />
-          </div>
-
-          <div className="w-full max-w-sm mx-auto h-full px-4 flex items-center justify-between">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <div
-                className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                style={{ backgroundColor: accent.hex, color: "#000000" }}
-              >
-                <Disc size={16} className={isPlaying ? "animate-spin" : ""} />
-              </div>
-              <div className="min-w-0 truncate">
-                <div className="text-xs font-bold truncate">{currentTrack.title}</div>
-                <div className="text-[10px] text-neutral-400 truncate">
-                  {currentTrack.artist}
-                </div>
-              </div>
-            </div>
-
-            <div
-              className="flex items-center gap-1.5 shrink-0"
-              onClick={(e) => e.stopPropagation()}
-            >
-              <button
-                onClick={togglePlayPause}
-                className="w-8 h-8 rounded-lg flex items-center justify-center active:scale-90 transition-transform"
-                style={{ backgroundColor: accent.hex, color: "#000000" }}
-              >
-                {isPlaying ? (
-                  <Pause size={14} fill="currentColor" />
-                ) : (
-                  <Play size={14} fill="currentColor" className="ml-0.5" />
-                )}
-              </button>
-              <button
-                onClick={skipNext}
-                className={`w-8 h-8 rounded-lg flex items-center justify-center ${
-                  isAmoled ? "bg-black text-neutral-300" : "bg-white text-neutral-700"
-                }`}
-              >
-                <SkipForward size={14} />
-              </button>
-            </div>
-          </div>
-        </div>
+          onTogglePlayPause={togglePlayPause}
+          onSkipNext={skipNext}
+        />
       )}
 
       {/* FLAT BOTTOM NAVIGATION BAR (56px) */}
@@ -1354,7 +1454,9 @@ export default function App() {
         onPlayMultiple={handlePlayMultipleFromMemory}
         onImportTracks={handleImportTracksToFolder}
         onCreateFolder={handleCreateFolder}
+        onDeleteFolder={handleDeleteFolder}
         onDeleteTrackFromMemory={handleDeleteTrackFromMemory}
+        hasHyperIsland={isHyperIslandVisible}
       />
 
       <EqualizerModal
@@ -1473,6 +1575,7 @@ export default function App() {
           setActiveNavTab("memory");
           setIsFileManagerOpen(true);
         }}
+        hasHyperIsland={isHyperIslandVisible}
       />
 
       <AddToPlaylistModal

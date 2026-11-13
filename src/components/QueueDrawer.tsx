@@ -47,6 +47,7 @@ interface QueueDrawerProps {
   onUploadAudioFiles: (files: FileList | File[]) => void;
   onCreatePlaylist: (name: string) => void;
   onOpenFileManager?: () => void;
+  hasHyperIsland?: boolean;
 }
 
 export const QueueDrawer: React.FC<QueueDrawerProps> = ({
@@ -73,6 +74,7 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
   onUploadAudioFiles,
   onCreatePlaylist,
   onOpenFileManager,
+  hasHyperIsland = false,
 }) => {
   const [activeTab, setActiveTab] = useState<"queue" | "playlists">("queue");
   const [searchQuery, setSearchQuery] = useState("");
@@ -136,7 +138,15 @@ export const QueueDrawer: React.FC<QueueDrawerProps> = ({
   return (
     <div
       onClick={onClose}
-      className="fixed inset-x-0 top-0 bottom-16 z-50 flex flex-col bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 select-none"
+      className={`fixed inset-x-0 z-50 flex flex-col bg-black/80 backdrop-blur-sm animate-in fade-in duration-150 select-none ${
+        hasHyperIsland ? "" : "pt-safe"
+      }`}
+      style={{
+        top: hasHyperIsland
+          ? "calc(max(env(safe-area-inset-top, 0px), 8px) + 52px)"
+          : "0px",
+        bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))",
+      }}
     >
       <div
         onClick={(e) => e.stopPropagation()}

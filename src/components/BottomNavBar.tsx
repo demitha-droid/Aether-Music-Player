@@ -47,11 +47,11 @@ export const BottomNavBar: React.FC<BottomNavBarProps> = ({
 
   return (
     <nav
-      className={`fixed bottom-0 left-0 right-0 z-[60] h-14 select-none ${
+      className={`fixed bottom-0 left-0 right-0 z-[60] pb-safe select-none ${
         isAmoled ? "bg-black text-white" : "bg-white text-neutral-900"
       }`}
     >
-      <div className="w-full max-w-sm mx-auto h-full px-2 flex items-center justify-around">
+      <div className="w-full max-w-sm mx-auto h-14 px-2 flex items-center justify-around">
         {tabs.map((tab) => {
           const isActive = activeTab === tab.id;
 

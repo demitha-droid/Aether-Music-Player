@@ -33,7 +33,9 @@ interface FileManagerModalProps {
   onPlayMultiple: (tracks: Track[]) => void;
   onImportTracks: (files: FileList | File[], targetFolderId: string) => void;
   onCreateFolder: (name: string, parentId: string | null) => void;
+  onDeleteFolder?: (folderId: string) => void;
   onDeleteTrackFromMemory: (trackId: string) => void;
+  hasHyperIsland?: boolean;
 }
 
 type SortField = "name" | "size" | "date" | "type";
@@ -53,7 +55,9 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
   onPlayMultiple,
   onImportTracks,
   onCreateFolder,
+  onDeleteFolder,
   onDeleteTrackFromMemory,
+  hasHyperIsland = false,
 }) => {
   const rootFolderId = useMemo(() => {
     const root = folders.find((f) => f.parentId === null);
@@ -248,6 +252,13 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
     }
   };
 
+  const openNewFolderPrompt = () => {
+    if (currentLocation === "all-files") {
+      navigateTo(rootFolderId);
+    }
+    setIsCreatingFolder(true);
+  };
+
   const handleCreateFolderSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (newFolderName.trim()) {
@@ -260,9 +271,17 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
 
   return (
     <div
-      className={`fixed inset-x-0 top-0 bottom-14 z-50 flex flex-col select-none ${
+      className={`fixed inset-x-0 z-50 flex flex-col select-none ${
+        hasHyperIsland ? "" : "pt-safe"
+      } ${
         isAmoled ? "bg-black text-white" : "bg-neutral-50 text-neutral-900"
       }`}
+      style={{
+        top: hasHyperIsland
+          ? "calc(max(env(safe-area-inset-top, 0px), 8px) + 52px)"
+          : "0px",
+        bottom: "calc(3.5rem + env(safe-area-inset-bottom, 0px))",
+      }}
     >
       <div className="w-full max-w-sm mx-auto flex flex-col h-full">
         {/* 1. FLAT TOP APP BAR (52px) */}
@@ -285,7 +304,8 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
                   : activeFolder?.name || "Phone Storage"}
               </h1>
               <p className="text-[11px] text-neutral-500 font-mono tabular-nums truncate">
-                {allTracks.length} {allTracks.length === 1 ? "file" : "files"} on device
+                {allTracks.length} {allTracks.length === 1 ? "file" : "files"} ·{" "}
+                {Math.max(0, folders.length - 1)} {folders.length - 1 === 1 ? "folder" : "folders"}
               </p>
             </div>
           </div>
@@ -312,16 +332,6 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
             </button>
 
             <button
-              onClick={() => setIsCreatingFolder(!isCreatingFolder)}
-              className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
-                isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
-              }`}
-              aria-label="New folder"
-            >
-              <FolderPlus size={16} style={{ color: accent.hex }} />
-            </button>
-
-            <button
               onClick={onClose}
               className={`w-9 h-9 flex items-center justify-center rounded-xl active:scale-95 transition-transform ${
                 isAmoled ? "bg-neutral-900 text-neutral-300" : "bg-neutral-200 text-neutral-700"
@@ -333,17 +343,17 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
           </div>
         </div>
 
-        {/* 2. PROMINENT PHONE STORAGE ACTION BAR (Add Audio Files & Scan Folder) */}
-        <div className="px-4 py-2 grid grid-cols-2 gap-2 shrink-0">
+        {/* 2. PROMINENT 3-ACTION BAR: ADD FILES, ADD FOLDER, NEW FOLDER */}
+        <div className="px-4 py-2 grid grid-cols-3 gap-2 shrink-0">
           <label
-            className="h-11 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-transform"
+            className="h-10 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform"
             style={{
               backgroundColor: accent.hex,
               color: "#000000",
             }}
           >
-            <Upload size={15} />
-            <span>Add Audio Files</span>
+            <Upload size={14} />
+            <span>Add Files</span>
             <input
               type="file"
               multiple
@@ -354,12 +364,12 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
           </label>
 
           <label
-            className={`h-11 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-95 transition-transform ${
+            className={`h-10 rounded-xl font-semibold text-[11px] flex items-center justify-center gap-1.5 cursor-pointer active:scale-95 transition-transform ${
               isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-neutral-900"
             }`}
           >
-            <FolderOpen size={15} style={{ color: accent.hex }} />
-            <span>Scan Folder</span>
+            <FolderOpen size={14} style={{ color: accent.hex }} />
+            <span>Add Folder</span>
             <input
               type="file"
               {...({ webkitdirectory: "", directory: "" } as any)}
@@ -368,6 +378,27 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
               className="hidden"
             />
           </label>
+
+          <button
+            type="button"
+            onClick={() =>
+              isCreatingFolder ? setIsCreatingFolder(false) : openNewFolderPrompt()
+            }
+            className={`h-10 rounded-xl font-semibold text-[11px] flex items-center justify-center gap-1.5 active:scale-95 transition-transform ${
+              isCreatingFolder
+                ? "text-black font-bold"
+                : isAmoled
+                ? "bg-neutral-900 text-white"
+                : "bg-neutral-200 text-neutral-900"
+            }`}
+            style={isCreatingFolder ? { backgroundColor: accent.hex } : undefined}
+          >
+            <FolderPlus
+              size={14}
+              style={{ color: isCreatingFolder ? "#000000" : accent.hex }}
+            />
+            <span>New Folder</span>
+          </button>
         </div>
 
         {/* 3. VIEW MODE & BREADCRUMB BAR */}
@@ -484,7 +515,7 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
               type="text"
               value={newFolderName}
               onChange={(e) => setNewFolderName(e.target.value)}
-              placeholder="New folder name..."
+              placeholder={`Create folder in ${activeFolder?.name || "Phone Storage"}...`}
               autoFocus
               className={`flex-1 px-3 h-10 rounded-xl focus:outline-none ${
                 isAmoled ? "bg-neutral-900 text-white" : "bg-neutral-200 text-black"
@@ -510,26 +541,26 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
         )}
 
         {/* 7. SINGLE-COLUMN FILE & FOLDER LIST */}
-        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 pb-24">
+        <div className="flex-1 overflow-y-auto px-4 py-2 space-y-1.5 pb-20">
           {allTracks.length === 0 && filteredSubfolders.length === 0 ? (
-            /* ZERO-STATE WHEN NO PHONE FILES ARE LOADED YET */
+            /* ZERO-STATE WHEN NO PHONE FILES OR FOLDERS ARE LOADED YET */
             <div
-              className={`mt-4 p-6 rounded-2xl flex flex-col items-center text-center ${
+              className={`mt-3 p-5 rounded-2xl flex flex-col items-center text-center ${
                 isAmoled ? "bg-neutral-900" : "bg-neutral-200/70"
               }`}
             >
               <div
-                className="w-14 h-14 rounded-2xl flex items-center justify-center mb-3"
+                className="w-12 h-12 rounded-2xl flex items-center justify-center mb-3"
                 style={{ backgroundColor: `${accent.hex}20`, color: accent.hex }}
               >
-                <HardDrive size={26} />
+                <HardDrive size={24} />
               </div>
-              <h3 className="text-sm font-bold">No Phone Audio Files Loaded</h3>
-              <p className="text-xs text-neutral-400 mt-1 max-w-[240px] leading-relaxed">
-                Select audio files or scan a music folder from your phone storage. Your tracks are saved locally for instant playback.
+              <h3 className="text-sm font-bold">Phone Storage Empty</h3>
+              <p className="text-xs text-neutral-400 mt-1 max-w-[250px] leading-relaxed">
+                Add audio files, import a music folder from your phone, or create folders to organize your tracks.
               </p>
 
-              <div className="w-full mt-5 space-y-2">
+              <div className="w-full mt-4 space-y-2">
                 <label
                   className="w-full h-11 rounded-xl font-bold text-xs flex items-center justify-center gap-2 cursor-pointer active:scale-98 transition-transform"
                   style={{ backgroundColor: accent.hex, color: "#000000" }}
@@ -551,7 +582,7 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
                   }`}
                 >
                   <FolderOpen size={15} style={{ color: accent.hex }} />
-                  <span>Scan Phone Music Folder</span>
+                  <span>Add Folder from Phone</span>
                   <input
                     type="file"
                     {...({ webkitdirectory: "", directory: "" } as any)}
@@ -560,6 +591,17 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
                     className="hidden"
                   />
                 </label>
+
+                <button
+                  type="button"
+                  onClick={openNewFolderPrompt}
+                  className={`w-full h-11 rounded-xl font-semibold text-xs flex items-center justify-center gap-2 active:scale-98 transition-transform ${
+                    isAmoled ? "bg-black text-white" : "bg-white text-neutral-900"
+                  }`}
+                >
+                  <FolderPlus size={15} style={{ color: accent.hex }} />
+                  <span>Create New Folder</span>
+                </button>
               </div>
             </div>
           ) : filteredSubfolders.length === 0 && filteredTracks.length === 0 ? (
@@ -571,17 +613,33 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
               <Folder size={28} style={{ color: accent.hex }} className="mb-2" />
               <h3 className="text-sm font-bold">Folder is Empty</h3>
               <p className="text-xs text-neutral-400 mt-1">
-                Tap "Add Audio Files" above to import tracks into this folder, or switch to "All Files".
+                Tap "Add Files" or "New Folder" above to populate {activeFolder?.name || "this folder"}.
               </p>
-              {allTracks.length > 0 && (
-                <button
-                  onClick={() => navigateTo("all-files")}
-                  className="mt-4 px-4 h-10 rounded-xl text-xs font-bold text-black"
-                  style={{ backgroundColor: accent.hex }}
-                >
-                  View All {allTracks.length} Phone Audio Files
-                </button>
-              )}
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {allTracks.length > 0 && (
+                  <button
+                    onClick={() => navigateTo("all-files")}
+                    className="px-4 h-10 rounded-xl text-xs font-bold text-black"
+                    style={{ backgroundColor: accent.hex }}
+                  >
+                    View All {allTracks.length} Files
+                  </button>
+                )}
+                {activeFolder &&
+                  activeFolder.id !== "folder-root" &&
+                  onDeleteFolder && (
+                    <button
+                      onClick={() => {
+                        const targetId = activeFolder.id;
+                        handleBack();
+                        onDeleteFolder(targetId);
+                      }}
+                      className="px-4 h-10 rounded-xl text-xs font-semibold text-red-400 bg-black/40"
+                    >
+                      Delete Folder
+                    </button>
+                  )}
+              </div>
             </div>
           ) : (
             <>
@@ -638,7 +696,21 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
                         </p>
                       </div>
                     </div>
-                    <ChevronRight size={18} className="text-neutral-500 shrink-0 ml-2" />
+                    <div className="flex items-center gap-1 shrink-0 ml-2">
+                      {itemCount === 0 && onDeleteFolder && sub.id !== "folder-root" && (
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onDeleteFolder(sub.id);
+                          }}
+                          className="w-8 h-8 rounded-lg flex items-center justify-center text-neutral-500 hover:text-red-400"
+                          title="Delete empty folder"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      )}
+                      <ChevronRight size={18} className="text-neutral-500" />
+                    </div>
                   </div>
                 );
               })}
@@ -732,7 +804,7 @@ export const FileManagerModal: React.FC<FileManagerModalProps> = ({
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className={`w-full max-w-sm mx-auto rounded-t-2xl p-5 space-y-4 ${
+            className={`w-full max-w-sm mx-auto rounded-t-2xl p-5 pb-safe space-y-4 ${
               isAmoled ? "bg-neutral-900 text-white" : "bg-white text-neutral-900"
             }`}
           >

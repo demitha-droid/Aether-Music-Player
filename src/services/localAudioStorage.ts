@@ -114,6 +114,54 @@ export async function deleteTrackFromDB(trackId: string): Promise<void> {
   }
 }
 
+export async function loadStoredFolders(): Promise<MemoryFolder[]> {
+  try {
+    const db = await openAudioDB();
+    return new Promise((resolve, reject) => {
+      const tx = db.transaction(FOLDERS_STORE, "readonly");
+      const store = tx.objectStore(FOLDERS_STORE);
+      const req = store.getAll();
+      req.onsuccess = () => {
+        resolve((req.result || []) as MemoryFolder[]);
+      };
+      req.onerror = () => reject(req.error);
+    });
+  } catch (err) {
+    console.warn("Failed to load folders from IndexedDB:", err);
+    return [];
+  }
+}
+
+export async function saveFolderToDB(folder: MemoryFolder): Promise<void> {
+  try {
+    const db = await openAudioDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(FOLDERS_STORE, "readwrite");
+      const store = tx.objectStore(FOLDERS_STORE);
+      store.put(folder);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Failed to save folder to IndexedDB:", err);
+  }
+}
+
+export async function deleteFolderFromDB(folderId: string): Promise<void> {
+  try {
+    const db = await openAudioDB();
+    await new Promise<void>((resolve, reject) => {
+      const tx = db.transaction(FOLDERS_STORE, "readwrite");
+      const store = tx.objectStore(FOLDERS_STORE);
+      store.delete(folderId);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => reject(tx.error);
+    });
+  } catch (err) {
+    console.warn("Failed to delete folder from IndexedDB:", err);
+  }
+}
+
 export function probeAudioDuration(file: File): Promise<number> {
   return new Promise((resolve) => {
     const url = URL.createObjectURL(file);

@@ -47,6 +47,7 @@ export class AudioEngine {
   constructor() {
     this.audioElement = new Audio();
     this.audioElement.preload = "auto";
+    this.audioElement.setAttribute("playsinline", "true");
 
     this.audioElement.addEventListener("timeupdate", () => {
       if (!this.isSynthetic && this.onTimeUpdate) {
@@ -80,6 +81,9 @@ export class AudioEngine {
 
     this.audioElement.addEventListener("play", () => {
       this.isPlaying = true;
+      if (this.ctx && this.ctx.state === "suspended") {
+        this.ctx.resume().catch(() => {});
+      }
       this.onPlayStateChange?.(true);
     });
 
@@ -87,6 +91,14 @@ export class AudioEngine {
       this.isPlaying = false;
       this.onPlayStateChange?.(false);
     });
+
+    if (typeof document !== "undefined") {
+      document.addEventListener("visibilitychange", () => {
+        if (this.isPlaying && this.ctx && this.ctx.state === "suspended") {
+          this.ctx.resume().catch(() => {});
+        }
+      });
+    }
   }
 
   public init() {
